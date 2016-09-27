@@ -207,7 +207,7 @@ Results on more hardware platforms will be added once they are available. We wel
 
 ## GEMM Results
 
-| Kernel                 | A Transpose | B Transpose | Application        | Results (ms) | TeraFLOPS | Processor     |
+| Kernel                 | A Transpose | B Transpose | Application        | Time (ms) | TeraFLOPS | Processor     |
 |------------------------|-------------|-------------|--------------------|--------------|-----------|---------------|
 | M=1760, N=128, K=1760  | N           | N           | Speech Recognition | 0.17         | 4.66      | TitanX Pascal |
 | M=7860, N=64, K=2560   | N           | N           | Speech Recognition | 0.42         | 5.94      | TitanX Pascal |
@@ -230,7 +230,7 @@ Results on more hardware platforms will be added once they are available. We wel
 The recurrent op kernels are only run on NVIDIA hardware. The recurrent benchmarks will be run on Intel hardware shortly. 
 Results should be available in October.
 
-| Hidden Units | Batch Size | TimeSteps | Recurrent Type | Application         | Total Time | Fwd TeraFLOPS | Processor     |
+| Hidden Units | Batch Size | TimeSteps | Recurrent Type | Application         | Total Time (ms) | Fwd TeraFLOPS | Processor     |
 |--------------|------------|-----------|----------------|---------------------|------------|---------------|---------------|
 | 1760         | 64         | 50        | Vanilla        | Speech Recognition  | 8.48       | 1.14          | TitanX Pascal |
 | 2560         | 32         | 50        | Vanilla        | Speech Recognition  | 24.69      | 1.69          | TitanX Pascal |
@@ -240,7 +240,7 @@ Results should be available in October.
 
 We couldn't run the All-Reduce benchmark on NVIDIA's TitanX Pascal GPU since we only had a single Pascal GPU. 
 
-| Size (# of floats) | Number of Processors | Application        | Result (ms) | Bandwidth (GB/s) | Processor      |
+| Size (# of floats) | Number of Processors | Application        | Time (ms) | Bandwidth (GB/s) | Processor      |
 |--------------------|----------------------|--------------------|-------------|------------------|----------------|
 | 16777216           | 8                    | Speech Recognition | 22.06       | 24.34            | TitanX Maxwell with InfiniBand FDR |
 | 16777216           | 16                   | Speech Recognition | 53.76       | 19.97            | Xeon Phi 7250 with Intel® Omni-Path |

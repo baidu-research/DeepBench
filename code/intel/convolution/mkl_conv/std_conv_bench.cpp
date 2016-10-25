@@ -119,6 +119,10 @@ static int bench_conv(conv_params_t param, int mode, int pad)
     biasStride[0] = 1;
 
     int NTIMES = param.iters;
+    if (NTIMES > 1024) {
+      ret = -1;
+      goto bail_out;
+    }
     srand48(1);
 
     double flops = 0.0;
@@ -218,10 +222,9 @@ static int bench_conv(conv_params_t param, int mode, int pad)
     double time_a[1024];
     for (int i = 0; i < NTIMES; i++) {
         double r_start =  getWallClockSeconds();
-        for (int j = 0; j < 3; j++)
-            CHECK_ERR( dnnExecute_F32(conv, (void**)resconv), err );
+        CHECK_ERR( dnnExecute_F32(conv, (void**)resconv), err );
         double r_stop =  getWallClockSeconds();
-        time_a[i] = (r_stop - r_start) / 3.0;
+        time_a[i] = (r_stop - r_start);
     }
     double avg_time = time_a[0];
     double min_time = time_a[0];

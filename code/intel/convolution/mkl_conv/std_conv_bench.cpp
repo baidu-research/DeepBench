@@ -119,6 +119,11 @@ static int bench_conv(conv_params_t param, int mode, int pad)
     biasStride[0] = 1;
 
     int NTIMES = param.iters;
+    if (NTIMES > 1024) {
+      ret = -1;
+      goto bail_out;
+    }
+    srand48(1);
 
     double flops = 0.0;
     if (pad == PAD) // Padding IS include into flops
@@ -172,10 +177,10 @@ static int bench_conv(conv_params_t param, int mode, int pad)
         CHECK_ERR( dnnAllocateBuffer_F32((void**)&resconv[dnnResourceFilter],lt_conv_filter), err );
         CHECK_ERR( dnnAllocateBuffer_F32((void**)&resconv[dnnResourceBias],lt_conv_bias), err );
 
-        for (size_t i = 0; i < dnnLayoutGetMemorySize_F32(lt_conv_dst) / sizeof(float); i++) resconv[dnnResourceDst][i] = 1.1;
-        for (size_t i = 0; i < dnnLayoutGetMemorySize_F32(lt_conv_src) / sizeof(float); i++) resconv[dnnResourceSrc][i] = 1.1;
-        for (size_t i = 0; i < dnnLayoutGetMemorySize_F32(lt_conv_filter) / sizeof(float); i++) resconv[dnnResourceFilter][i] = 1.1;
-        for (size_t i = 0; i < dnnLayoutGetMemorySize_F32(lt_conv_bias) / sizeof(float); i++) resconv[dnnResourceBias][i] = 1.1;
+        for (size_t i = 0; i < dnnLayoutGetMemorySize_F32(lt_conv_dst) / sizeof(float); i++) resconv[dnnResourceDst][i] = (float)drand48();
+        for (size_t i = 0; i < dnnLayoutGetMemorySize_F32(lt_conv_src) / sizeof(float); i++) resconv[dnnResourceSrc][i] = (float)drand48();
+        for (size_t i = 0; i < dnnLayoutGetMemorySize_F32(lt_conv_filter) / sizeof(float); i++) resconv[dnnResourceFilter][i] = (float)drand48();
+        for (size_t i = 0; i < dnnLayoutGetMemorySize_F32(lt_conv_bias) / sizeof(float); i++) resconv[dnnResourceBias][i] = (float)drand48();
     } else if (mode == BWD_D_CONVOLUTION) {
         CHECK_ERR( dnnConvolutionCreateBackwardData_F32 (&conv, NULL,
                     dnnAlgorithmConvolutionDirect, dimension, inputSize,
@@ -189,9 +194,9 @@ static int bench_conv(conv_params_t param, int mode, int pad)
         CHECK_ERR( dnnAllocateBuffer_F32((void**)&resconv[dnnResourceDiffDst],lt_conv_diff_dst), err );
         CHECK_ERR( dnnAllocateBuffer_F32((void**)&resconv[dnnResourceFilter],lt_conv_filter), err );
 
-        for (size_t i = 0; i < dnnLayoutGetMemorySize_F32(lt_conv_diff_src) / sizeof(float); i++) resconv[dnnResourceDiffSrc][i] = 1.1;
-        for (size_t i = 0; i < dnnLayoutGetMemorySize_F32(lt_conv_diff_dst) / sizeof(float); i++) resconv[dnnResourceDiffDst][i] = 1.1;
-        for (size_t i = 0; i < dnnLayoutGetMemorySize_F32(lt_conv_filter) / sizeof(float); i++) resconv[dnnResourceFilter][i] = 1.1;
+        for (size_t i = 0; i < dnnLayoutGetMemorySize_F32(lt_conv_diff_src) / sizeof(float); i++) resconv[dnnResourceDiffSrc][i] = (float)drand48();
+        for (size_t i = 0; i < dnnLayoutGetMemorySize_F32(lt_conv_diff_dst) / sizeof(float); i++) resconv[dnnResourceDiffDst][i] = (float)drand48();
+        for (size_t i = 0; i < dnnLayoutGetMemorySize_F32(lt_conv_filter) / sizeof(float); i++) resconv[dnnResourceFilter][i] = (float)drand48();
     } else if (mode == BWD_F_CONVOLUTION) {
         CHECK_ERR( dnnConvolutionCreateBackwardFilter_F32 (&conv, NULL,
                     dnnAlgorithmConvolutionDirect, dimension, inputSize,
@@ -205,9 +210,9 @@ static int bench_conv(conv_params_t param, int mode, int pad)
         CHECK_ERR( dnnAllocateBuffer_F32((void**)&resconv[dnnResourceDiffDst],lt_conv_diff_dst), err );
         CHECK_ERR( dnnAllocateBuffer_F32((void**)&resconv[dnnResourceSrc],lt_conv_src), err );
 
-        for (size_t i = 0; i < dnnLayoutGetMemorySize_F32(lt_conv_diff_filter) / sizeof(float); i++) resconv[dnnResourceDiffFilter][i] = 1.1;
-        for (size_t i = 0; i < dnnLayoutGetMemorySize_F32(lt_conv_diff_dst) / sizeof(float); i++) resconv[dnnResourceDiffDst][i] = 1.1;
-        for (size_t i = 0; i < dnnLayoutGetMemorySize_F32(lt_conv_src) / sizeof(float); i++) resconv[dnnResourceSrc][i] = 1.1;
+        for (size_t i = 0; i < dnnLayoutGetMemorySize_F32(lt_conv_diff_filter) / sizeof(float); i++) resconv[dnnResourceDiffFilter][i] = (float)drand48();
+        for (size_t i = 0; i < dnnLayoutGetMemorySize_F32(lt_conv_diff_dst) / sizeof(float); i++) resconv[dnnResourceDiffDst][i] = (float)drand48();
+        for (size_t i = 0; i < dnnLayoutGetMemorySize_F32(lt_conv_src) / sizeof(float); i++) resconv[dnnResourceSrc][i] = (float)drand48();
     } else {
         ret = -1;
         goto bail_out;
@@ -217,10 +222,9 @@ static int bench_conv(conv_params_t param, int mode, int pad)
     double time_a[1024];
     for (int i = 0; i < NTIMES; i++) {
         double r_start =  getWallClockSeconds();
-        for (int j = 0; j < 3; j++)
-            CHECK_ERR( dnnExecute_F32(conv, (void**)resconv), err );
+        CHECK_ERR( dnnExecute_F32(conv, (void**)resconv), err );
         double r_stop =  getWallClockSeconds();
-        time_a[i] = (r_stop - r_start) / 3.0;
+        time_a[i] = (r_stop - r_start);
     }
     double avg_time = time_a[0];
     double min_time = time_a[0];

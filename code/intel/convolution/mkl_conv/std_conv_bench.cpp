@@ -259,6 +259,22 @@ static int bench_conv(conv_params_t param, int mode, int pad)
         min_time/1e-3, min_gflops, avg_time/1e-3, avg_gflops); fflush(0);
 
 bail_out:
+    dnnLayoutDelete_F32(lt_conv_src);
+    dnnLayoutDelete_F32(lt_conv_diff_src);
+    dnnLayoutDelete_F32(lt_conv_dst);
+    dnnLayoutDelete_F32(lt_conv_diff_dst);
+    dnnLayoutDelete_F32(lt_conv_filter);
+    dnnLayoutDelete_F32(lt_conv_diff_filter);
+    dnnLayoutDelete_F32(lt_conv_bias);
+    for (int i = 0; i < dnnResourceNumber; i++)
+        dnnReleaseBuffer_F32((void *)resconv[i]);
+    dnnDelete_F32(conv);
+#ifdef MEASURE_BWD_FILT_CONVERSION
+    dnnDelete_F32(fwd_conv);
+    dnnDelete_F32(filt_cv);
+    dnnLayoutDelete_F32(lt_fwd_conv_filter);
+    dnnReleaseBuffer_F32((void *)rescv[dnnResourceFrom]);
+#endif
     return ret;
 }
 

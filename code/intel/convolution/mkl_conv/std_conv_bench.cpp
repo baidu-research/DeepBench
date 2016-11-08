@@ -177,10 +177,15 @@ static int bench_conv(conv_params_t param, int mode, int pad)
         CHECK_ERR( dnnAllocateBuffer_F32((void**)&resconv[dnnResourceFilter],lt_conv_filter), err );
         CHECK_ERR( dnnAllocateBuffer_F32((void**)&resconv[dnnResourceBias],lt_conv_bias), err );
 
-        for (size_t i = 0; i < dnnLayoutGetMemorySize_F32(lt_conv_dst) / sizeof(float); i++) resconv[dnnResourceDst][i] = (float)drand48();
-        for (size_t i = 0; i < dnnLayoutGetMemorySize_F32(lt_conv_src) / sizeof(float); i++) resconv[dnnResourceSrc][i] = (float)drand48();
-        for (size_t i = 0; i < dnnLayoutGetMemorySize_F32(lt_conv_filter) / sizeof(float); i++) resconv[dnnResourceFilter][i] = (float)drand48();
-        for (size_t i = 0; i < dnnLayoutGetMemorySize_F32(lt_conv_bias) / sizeof(float); i++) resconv[dnnResourceBias][i] = (float)drand48();
+        size_t lt_conv_dst_len = dnnLayoutGetMemorySize_F32(lt_conv_dst) / sizeof(float);
+        size_t lt_conv_src_len = dnnLayoutGetMemorySize_F32(lt_conv_src) / sizeof(float);
+        size_t lt_conv_filter_len = dnnLayoutGetMemorySize_F32(lt_conv_filter) / sizeof(float);
+        size_t lt_conv_bias_len = dnnLayoutGetMemorySize_F32(lt_conv_bias) / sizeof(float);
+
+        for (size_t i = 0; i < lt_conv_dst_len; i++) resconv[dnnResourceDst][i] = 1.1;
+        for (size_t i = 0; i < lt_conv_src_len; i++) resconv[dnnResourceSrc][i] = 1.1;
+        for (size_t i = 0; i < lt_conv_filter_len; i++) resconv[dnnResourceFilter][i] = 1.1;
+        for (size_t i = 0; i < lt_conv_bias_len; i++) resconv[dnnResourceBias][i] = 1.1;
     } else if (mode == BWD_D_CONVOLUTION) {
         CHECK_ERR( dnnConvolutionCreateBackwardData_F32 (&conv, NULL,
                     dnnAlgorithmConvolutionDirect, dimension, inputSize,
@@ -194,9 +199,14 @@ static int bench_conv(conv_params_t param, int mode, int pad)
         CHECK_ERR( dnnAllocateBuffer_F32((void**)&resconv[dnnResourceDiffDst],lt_conv_diff_dst), err );
         CHECK_ERR( dnnAllocateBuffer_F32((void**)&resconv[dnnResourceFilter],lt_conv_filter), err );
 
-        for (size_t i = 0; i < dnnLayoutGetMemorySize_F32(lt_conv_diff_src) / sizeof(float); i++) resconv[dnnResourceDiffSrc][i] = (float)drand48();
-        for (size_t i = 0; i < dnnLayoutGetMemorySize_F32(lt_conv_diff_dst) / sizeof(float); i++) resconv[dnnResourceDiffDst][i] = (float)drand48();
-        for (size_t i = 0; i < dnnLayoutGetMemorySize_F32(lt_conv_filter) / sizeof(float); i++) resconv[dnnResourceFilter][i] = (float)drand48();
+
+        size_t lt_conv_diff_src_len = dnnLayoutGetMemorySize_F32(lt_conv_diff_src) / sizeof(float);
+        size_t lt_conv_diff_dst_len = dnnLayoutGetMemorySize_F32(lt_conv_diff_dst) / sizeof(float);
+        size_t lt_conv_filter_len = dnnLayoutGetMemorySize_F32(lt_conv_filter) / sizeof(float);
+
+        for (size_t i = 0; i < lt_conv_diff_src_len; i++) resconv[dnnResourceDiffSrc][i] = 1.1;
+        for (size_t i = 0; i < lt_conv_diff_dst_len; i++) resconv[dnnResourceDiffDst][i] = 1.1;
+        for (size_t i = 0; i < lt_conv_filter_len; i++) resconv[dnnResourceFilter][i] = 1.1;
     } else if (mode == BWD_F_CONVOLUTION) {
         CHECK_ERR( dnnConvolutionCreateBackwardFilter_F32 (&conv, NULL,
                     dnnAlgorithmConvolutionDirect, dimension, inputSize,
@@ -210,9 +220,13 @@ static int bench_conv(conv_params_t param, int mode, int pad)
         CHECK_ERR( dnnAllocateBuffer_F32((void**)&resconv[dnnResourceDiffDst],lt_conv_diff_dst), err );
         CHECK_ERR( dnnAllocateBuffer_F32((void**)&resconv[dnnResourceSrc],lt_conv_src), err );
 
-        for (size_t i = 0; i < dnnLayoutGetMemorySize_F32(lt_conv_diff_filter) / sizeof(float); i++) resconv[dnnResourceDiffFilter][i] = (float)drand48();
-        for (size_t i = 0; i < dnnLayoutGetMemorySize_F32(lt_conv_diff_dst) / sizeof(float); i++) resconv[dnnResourceDiffDst][i] = (float)drand48();
-        for (size_t i = 0; i < dnnLayoutGetMemorySize_F32(lt_conv_src) / sizeof(float); i++) resconv[dnnResourceSrc][i] = (float)drand48();
+        size_t lt_conv_diff_filter_len = dnnLayoutGetMemorySize_F32(lt_conv_diff_filter) / sizeof(float);
+        size_t lt_conv_diff_dst_len = dnnLayoutGetMemorySize_F32(lt_conv_diff_dst) / sizeof(float);
+        size_t lt_conv_src_len = dnnLayoutGetMemorySize_F32(lt_conv_src) / sizeof(float);
+
+        for (size_t i = 0; i < lt_conv_diff_filter_len; i++) resconv[dnnResourceDiffFilter][i] = 1.1;
+        for (size_t i = 0; i < lt_conv_diff_dst_len; i++) resconv[dnnResourceDiffDst][i] = 1.1;
+        for (size_t i = 0; i < lt_conv_src_len; i++) resconv[dnnResourceSrc][i] = 1.1;
     } else {
         ret = -1;
         goto bail_out;
@@ -245,6 +259,22 @@ static int bench_conv(conv_params_t param, int mode, int pad)
         min_time/1e-3, min_gflops, avg_time/1e-3, avg_gflops); fflush(0);
 
 bail_out:
+    dnnLayoutDelete_F32(lt_conv_src);
+    dnnLayoutDelete_F32(lt_conv_diff_src);
+    dnnLayoutDelete_F32(lt_conv_dst);
+    dnnLayoutDelete_F32(lt_conv_diff_dst);
+    dnnLayoutDelete_F32(lt_conv_filter);
+    dnnLayoutDelete_F32(lt_conv_diff_filter);
+    dnnLayoutDelete_F32(lt_conv_bias);
+    for (int i = 0; i < dnnResourceNumber; i++)
+        dnnReleaseBuffer_F32((void *)resconv[i]);
+    dnnDelete_F32(conv);
+#ifdef MEASURE_BWD_FILT_CONVERSION
+    dnnDelete_F32(fwd_conv);
+    dnnDelete_F32(filt_cv);
+    dnnLayoutDelete_F32(lt_fwd_conv_filter);
+    dnnReleaseBuffer_F32((void *)rescv[dnnResourceFrom]);
+#endif
     return ret;
 }
 

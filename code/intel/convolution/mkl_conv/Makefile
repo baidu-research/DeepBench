@@ -14,12 +14,27 @@
 # limitations under the License.
 #*******************************************************************************
 
+#MKLLIB=mklml_intel
+
+RETURN_STRING=$(shell sh ../../externals/prepare_mkl.sh)
+
+MKLROOT=$(firstword $(RETURN_STRING))
+MKLLIB=$(word 2, $(RETURN_STRING))
+
+tmp=$(shell echoi "Here")
+tmp=$(shell echo $MKLLIB)
 
 CC       =  icc
-CFLAGS   =  -O3 -Wall -I$(MKLROOT)/include -qopenmp -std=c++11
+CFLAGS   =  -O3  -Wall -I$(MKLROOT)/include -qopenmp -std=c++11
 OBJS     =  std_conv_bench.o
 
+ifeq ($(MKLLIB), mklml_intel)
+EXTRALIB = -Wl,--start-group -L$(MKLROOT)/lib -lmklml_intel -liomp5 -lpthread -lm -ldl
+endif
+
+ifeq ($(MKLLIB), mkl_rt)
 EXTRALIB = -Wl,--start-group $(MKLROOT)/lib/intel64/libmkl_intel_lp64.a $(MKLROOT)/lib/intel64/libmkl_intel_thread.a $(MKLROOT)/lib/intel64/libmkl_core.a -Wl,--end-group -liomp5 -lpthread -lm -ldl
+endif
 
 all : std_conv_bench
 
@@ -31,3 +46,4 @@ std_conv_bench.o : std_conv_bench.cpp input.h
 
 clean :
 	rm -f *.o std_conv_bench.o std_conv_bench
+

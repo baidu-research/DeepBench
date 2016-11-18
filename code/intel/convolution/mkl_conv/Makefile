@@ -23,7 +23,6 @@ RETURN_STRING=$(shell sh ../../externals/prepare_mkl.sh)
 MKLROOT=$(firstword $(RETURN_STRING))
 MKLLIB=$(word 2, $(RETURN_STRING))
 
-tmp=$(shell echoi "Here")
 tmp=$(shell echo $MKLLIB)
 
 CC       =  icc

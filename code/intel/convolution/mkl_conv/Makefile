@@ -14,7 +14,9 @@
 # limitations under the License.
 #*******************************************************************************
 
-#MKLLIB=mklml_intel
+ifeq ($(MKLROOT),)
+$(error MKLROOT must be defined. It's possible to use Intel MKL 2017 Gold and higher or Intel MKLML package from IntelCaffe: https://github.com/intel/caffe/releases)
+endif
 
 RETURN_STRING=$(shell sh ../../externals/prepare_mkl.sh)
 
@@ -29,11 +31,11 @@ CFLAGS   =  -O3  -Wall -I$(MKLROOT)/include -qopenmp -std=c++11
 OBJS     =  std_conv_bench.o
 
 ifeq ($(MKLLIB), mklml_intel)
-EXTRALIB = -Wl,--start-group -L$(MKLROOT)/lib -lmklml_intel -liomp5 -lpthread -lm -ldl
+EXTRALIB = -L$(MKLROOT)/lib -lmklml_intel -liomp5 -lpthread -lm -ldl
 endif
 
 ifeq ($(MKLLIB), mkl_rt)
-EXTRALIB = -Wl,--start-group $(MKLROOT)/lib/intel64/libmkl_intel_lp64.a $(MKLROOT)/lib/intel64/libmkl_intel_thread.a $(MKLROOT)/lib/intel64/libmkl_core.a -Wl,--end-group -liomp5 -lpthread -lm -ldl
+EXTRALIB = -L$(MKLROOT)/lib/intel64/ -lmkl_rt -liomp5 -lpthread -lm -ldl
 endif
 
 all : std_conv_bench

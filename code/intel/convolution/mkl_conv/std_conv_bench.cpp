@@ -112,6 +112,8 @@ static inline void rand_fill(float *data, size_t len)
         data[i] = drand48();
 }
 
+#ifdef USE_MKL
+
 #include "mkl_dnn.h"
 
 #define STR1(x) #x
@@ -188,6 +190,90 @@ static bench_result bench_conv(conv_problem prob, int mode, bool skip_padding)
 
     return result;
 }
+#endif
+
+#ifdef USE_MKLDNN
+
+#include "mkldnn.hpp"
+
+using namespace mkldnn;
+
+static bench_result bench_conv(conv_problem prob, int mode, bool skip_padding)
+{
+    engine eng(engine::kind::cpu, 0);
+
+    int groups = std::max(1, prob.groups);
+
+    memory::desc src_d({prob.minibatch, prob.ic, prob.w, prob.h},
+            memory::data_type::f32, memory::format::any);
+    memory::desc dst_d({prob.minibatch, prob.oc,
+            calc_out_dim(prob.w, prob.fw, prob.padd, prob.stride),
+            calc_out_dim(prob.h, prob.fh, prob.padd, prob.stride)},
+            memory::data_type::f32, memory::format::any);
+    memory::desc filter_d({groups, prob.oc / groups, prob.ic / groups,
+            prob.fw, prob.fh}, memory::data_type::f32, memory::format::any);
+    memory::desc bias_d({prob.oc},
+            memory::data_type::f32, memory::format::any);
+    memory::dims strides = {prob.stride, prob.stride};
+    memory::dims padding = {prob.padd, prob.padd};
+
+    std::shared_ptr<primitive> conv;
+    std::shared_ptr<memory> src;
+    std::shared_ptr<memory> dst;
+    std::shared_ptr<memory> filter;
+    std::shared_ptr<memory> bias;
+
+    auto fwd_conv_pd = convolution_forward::primitive_desc(
+            {prop_kind::forward_training, algorithm::convolution_direct,
+            src_d, filter_d, bias_d, dst_d,
+            strides, padding, padding, padding_kind::zero}, eng);
+
+    if (mode == FWD_CONVOLUTION) {
+        src.reset(new memory(fwd_conv_pd.src_primitive_desc()));
+        dst.reset(new memory(fwd_conv_pd.dst_primitive_desc()));
+        filter.reset(new memory(fwd_conv_pd.weights_primitive_desc()));
+        bias.reset(new memory(fwd_conv_pd.bias_primitive_desc()));
+        conv.reset(new convolution_forward(fwd_conv_pd,
+                    *src, *filter, *bias, *dst));
+    } else if (mode == BWD_D_CONVOLUTION) {
+        auto bwd_d_conv_pd = convolution_backward_data::primitive_desc(
+                {algorithm::convolution_direct, src_d, filter_d, dst_d,
+                strides, padding, padding, padding_kind::zero}, eng,
+                fwd_conv_pd);
+        src.reset(new memory(bwd_d_conv_pd.diff_src_primitive_desc()));
+        dst.reset(new memory(bwd_d_conv_pd.diff_dst_primitive_desc()));
+        filter.reset(new memory(bwd_d_conv_pd.weights_primitive_desc()));
+        conv.reset(new convolution_backward_data(bwd_d_conv_pd,
+                    *dst, *filter, *src));
+    } else if (mode == BWD_F_CONVOLUTION) {
+        auto bwd_f_conv_pd = convolution_backward_weights::primitive_desc(
+                {algorithm::convolution_direct, src_d, filter_d, bias_d, dst_d,
+                strides, padding, padding, padding_kind::zero}, eng,
+                fwd_conv_pd);
+        src.reset(new memory(bwd_f_conv_pd.src_primitive_desc()));
+        dst.reset(new memory(bwd_f_conv_pd.diff_dst_primitive_desc()));
+        filter.reset(new memory(bwd_f_conv_pd.diff_weights_primitive_desc()));
+        bias.reset(new memory(bwd_f_conv_pd.diff_bias_primitive_desc()));
+        conv.reset(new convolution_backward_weights(bwd_f_conv_pd,
+                    *src, *dst, *filter, *bias));
+    } else
+        throw std::runtime_error("Invalid benchmarking mode");
+
+    for (const auto &m : {src, dst, filter, bias}) {
+        if (!m.get() || !m->get())
+            continue;
+        float *data = static_cast<float *>(m->get_data_handle());
+        size_t len = m->get_primitive_desc().get_size() / sizeof(float);
+        rand_fill(data, len);
+    }
+
+    stream str(stream::kind::eager);
+    str.submit({*conv}).wait();
+
+    return timeit(prob.iters, calc_flops(skip_padding, prob),
+            [&](){str.rerun().wait();});
+}
+#endif
 
 static void usage()
 {

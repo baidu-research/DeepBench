@@ -14,6 +14,9 @@
 # limitations under the License.
 #*******************************************************************************
 
+CONVLIB ?= MKL
+
+ifeq ($(CONVLIB),MKL)
 ifeq ($(MKLROOT),)
     $(error MKLROOT is empty. Please install Intel MKL 2017 or newer, or \
         download an Intel MKLML package from \
@@ -30,6 +33,17 @@ ifeq ($(MKLLIB), mkl_rt)
     EXTRALIB = -L$(MKLROOT)/lib/intel64/ -lmkl_rt
 endif
 EXTRALIB += -liomp5 -lpthread -lm -ldl
+endif
+
+ifeq ($(CONVLIB),MKLDNN)
+ifeq ($(MKLDNNROOT),)
+    $(error MKLDNNROOT is empty. Please build MKLDNN from \
+        https://github.com/01org/mkl-dnn and point MKLDNNROOT \
+        to the install directory.)
+endif
+EXTRACXXFLAGS = -I$(MKLDNNROOT)/include -DUSE_MKLDNN
+EXTRALIB = -L$(MKLDNNROOT)/lib -lmkldnn
+endif
 
 INPUT_H ?= input.h
 

@@ -286,7 +286,7 @@ int main(int argc, char **argv)
     if (argc > 3)
         usage();
 
-    bool skip_padding = true;
+    bool skip_padding = false;
     if (argc > 1) {
         if (argv[1] == std::string("0"))
             skip_padding = true;

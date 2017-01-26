@@ -38,9 +38,7 @@ static inline int calc_out_dim(
     return (input_dim - filter_dim + 2 * padd) / stride + 1;
 }
 
-// Calculates number of operations. Note that this assumes that the numbers of
-// output and input channels *HAVE NOT* been divided by the number of groups
-// as MKL and MKL-DNN do; this is so to match the data as defined in input.h
+// Calculates number of operations.
 static double calc_flops(bool skip_padding, const conv_problem& prob)
 {
     double flops;
@@ -62,7 +60,8 @@ static double calc_flops(bool skip_padding, const conv_problem& prob)
         }
     } else
         flops = 1.0 * prob.fw * prob.fh * OW * OH;
-    return 2.0 * flops * prob.ic * prob.oc * prob.minibatch;
+    int groups = std::max(1, prob.groups);
+    return 2.0 * flops * prob.ic * prob.oc * prob.minibatch / groups;
 }
 
 struct bench_result {

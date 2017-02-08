@@ -174,9 +174,9 @@ int main(int argc, char **argv) {
         bool a_t, b_t;
         std::tie(m, n, k, a_t, b_t) = problem;
 
-        auto a = rand({m, k}, curand_gen);
-        auto b = rand({a_t ? m : (b_t ? n : k), b_t ? k : n}, curand_gen);
-        auto c = zeros({a_t ? k : m, n});
+        auto a = rand({a_t ? k : m, a_t ? m : k}, curand_gen);
+        auto b = rand({b_t ? n : k, b_t ? k : n}, curand_gen);
+        auto c = zeros({m, n});
 
         std::cout << std::setw(7) << m;
         std::cout << std::setw(7) << n;

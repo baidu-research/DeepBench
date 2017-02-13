@@ -209,11 +209,11 @@ Results on more hardware platforms will be added once they are available. We wel
 
 | Kernel                 | A Transpose | B Transpose | Application        | Time (ms) | TeraFLOPS | Processor     |
 |------------------------|-------------|-------------|--------------------|--------------|-----------|---------------|
-| M=1760, N=128, K=1760  | N           | N           | Speech Recognition | 0.17         | 4.66      | TitanX Pascal |
-| M=7860, N=64, K=2560   | N           | N           | Speech Recognition | 0.42         | 5.94      | TitanX Pascal |
-| M=2560, N=64, K=2560   | N           | N           | Speech Recognition | 0.28         | 3.02      | TitanX Pascal |
+| M=1760, N=128, K=1760  | N           | N           | Speech Recognition | 0.11         | 7.41      | TitanX Pascal |
+| M=7860, N=64, K=2560   | N           | N           | Speech Recognition | 0.45         | 5.59      | TitanX Pascal |
+| M=2560, N=64, K=2560   | N           | N           | Speech Recognition | 0.30         | 2.81      | TitanX Pascal |
 | M=5124, N=9124, K=2560 | T           | N           | Speech Recognition | 55.17        | 4.34      | Xeon Phi 7250 |
-| M=3072, N=128, K=1024  | T           | N           | Speech Recognition | 0.28         | 2.87      | TitanX Pascal |
+| M=3072, N=128, K=1024  | T           | N           | Speech Recognition | 0.13         | 6.01      | TitanX Pascal |
 
 ## Convolution Results
 

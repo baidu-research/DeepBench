@@ -21,7 +21,7 @@ processors targeted at deep learning.
 
 ## Where does DeepBench fit in? 
 
-The Deep Learning eco system is consists of several different pieces. 
+The Deep Learning eco system consists of several different pieces. 
 We wanted to highlight where DeepBench fits into this eco system. 
 The diagram below describes the software and hardware components involved with deep learning.
 At the very top, deep learning frameworks like Baidu's [PaddlePaddle] (https://github.com/baidu/Paddle), Theano, 
@@ -92,7 +92,7 @@ work is elided.
 
 Convolutions make up the vast majority of flops in networks that
 operate on images and videos and form important parts of networks such
-as speech and natural language modeling making them, perhaps, the
+as speech and natural language modeling, thus making them perhaps the
 single most important layer from a performance perspective.
 
 Convolutions have 4 or 5 dimensional inputs and outputs giving rise to
@@ -113,7 +113,7 @@ the approach used for each size in the spreadsheet.
 
 Recurrent layers are usually made up of some combination of the above
 operations and also simpler operations such as unary or binary
-operations which aren't very compute intensive and generally are a
+operations which aren't very compute intensive and generally constitute a
 small percentage of overall runtime.  However, the GEMM and
 convolution operations are relatively small in recurrent layers, 
 so the cost of these smaller operations can become significant.  This is especially true if there
@@ -121,7 +121,7 @@ is a high fixed overhead associated with starting a computation.  It
 is also possible to use alternate storage formats for the recurrent
 matrices because the cost of converting to a new storage format can be
 amortized over the many steps of the recurrent computation.  If this
-is done the time to convert to and from the custom format should be
+is done, the time to convert to and from the custom format should be
 included in the overall time.
 
 These factors lead to many optimization possibilities both within a
@@ -151,8 +151,8 @@ not have peephole connections.
 
 ## All-Reduce
 
-Neural networks are today often trained across multiple GPUs or even
-multiple systems each with multiple GPUs.  There are two main categories of techniques for
+Neural networks today are often trained across multiple GPUs or even
+multiple systems, each with multiple GPUs.  There are two main categories of techniques for
 doing this: synchronous and asynchronous. Synchronous techniques rely
 on keeping the parameters on all instances of the model synchronized, usually by making
 sure all instances of the model have the same copy of the gradients before taking an

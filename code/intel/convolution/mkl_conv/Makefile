@@ -55,12 +55,13 @@ endif
 
 CXX      = icpc
 CXXFLAGS = -Wall -std=c++11 $(OPTFLAGS) $(EXTRACXXFLAGS) -DINPUT_H=\"$(INPUT_H)\"
+LFLAGS   = -lrt
 OBJS     = std_conv_bench.o
 
 all : std_conv_bench
 
 std_conv_bench : std_conv_bench.o
-	$(CXX) $(CXXFLAGS) $^  $(EXTRALIB)  -o $@
+	$(CXX) $(CXXFLAGS) $(LFLAGS) $^  $(EXTRALIB)  -o $@
 
 std_conv_bench.o : std_conv_bench.cpp input.h
 	$(CXX) $(CXXFLAGS) -c -o $@ $<

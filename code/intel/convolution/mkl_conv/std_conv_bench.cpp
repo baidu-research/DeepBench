@@ -193,6 +193,8 @@ static bench_result bench_conv(conv_problem prob, int mode, bool skip_padding)
 
 #ifdef USE_MKLDNN
 
+#define COMPUTE_BWD_BIAS 0
+
 #include "mkldnn.hpp"
 
 using namespace mkldnn;
@@ -209,8 +211,10 @@ static bench_result bench_conv(conv_problem prob, int mode, bool skip_padding)
             calc_out_dim(prob.w, prob.fw, prob.padd, prob.stride),
             calc_out_dim(prob.h, prob.fh, prob.padd, prob.stride)},
             memory::data_type::f32, memory::format::any);
-    memory::desc filter_d({groups, prob.oc / groups, prob.ic / groups,
-            prob.fw, prob.fh}, memory::data_type::f32, memory::format::any);
+    std::vector<int> fsizes
+        = {prob.oc / groups, prob.ic / groups, prob.fw, prob.fh};
+    if (groups != 1) fsizes.insert(fsizes.begin(), groups);
+    memory::desc filter_d(fsizes, memory::data_type::f32, memory::format::any);
     memory::desc bias_d({prob.oc},
             memory::data_type::f32, memory::format::any);
     memory::dims strides = {prob.stride, prob.stride};
@@ -246,15 +250,24 @@ static bench_result bench_conv(conv_problem prob, int mode, bool skip_padding)
                     *dst, *filter, *src));
     } else if (mode == BWD_F_CONVOLUTION) {
         auto bwd_f_conv_pd = convolution_backward_weights::primitive_desc(
-                {algorithm::convolution_direct, src_d, filter_d, bias_d, dst_d,
+                {algorithm::convolution_direct, src_d, filter_d,
+#if COMPUTE_BWD_BIAS
+                bias_d,
+#endif
+                dst_d,
                 strides, padding, padding, padding_kind::zero}, eng,
                 fwd_conv_pd);
         src.reset(new memory(bwd_f_conv_pd.src_primitive_desc()));
         dst.reset(new memory(bwd_f_conv_pd.diff_dst_primitive_desc()));
         filter.reset(new memory(bwd_f_conv_pd.diff_weights_primitive_desc()));
+#if COMPUTE_BWD_BIAS
+        conv.reset(new convolution_backward_weights(bwd_f_conv_pd,
+                    *src, *dst, *filter));
+#else
         bias.reset(new memory(bwd_f_conv_pd.diff_bias_primitive_desc()));
         conv.reset(new convolution_backward_weights(bwd_f_conv_pd,
                     *src, *dst, *filter, *bias));
+#endif
     } else
         throw std::runtime_error("Invalid benchmarking mode");
 

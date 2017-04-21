@@ -261,12 +261,12 @@ static bench_result bench_conv(conv_problem prob, int mode, bool skip_padding)
         dst.reset(new memory(bwd_f_conv_pd.diff_dst_primitive_desc()));
         filter.reset(new memory(bwd_f_conv_pd.diff_weights_primitive_desc()));
 #if COMPUTE_BWD_BIAS
-        conv.reset(new convolution_backward_weights(bwd_f_conv_pd,
-                    *src, *dst, *filter));
-#else
         bias.reset(new memory(bwd_f_conv_pd.diff_bias_primitive_desc()));
         conv.reset(new convolution_backward_weights(bwd_f_conv_pd,
                     *src, *dst, *filter, *bias));
+#else
+        conv.reset(new convolution_backward_weights(bwd_f_conv_pd,
+                    *src, *dst, *filter));
 #endif
     } else
         throw std::runtime_error("Invalid benchmarking mode");

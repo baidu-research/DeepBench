@@ -229,7 +229,18 @@ public:
     ConvolutionDescriptor(int pad_h, int pad_w, int hstride, int wstride) :
         desc_(new cudnnConvolutionDescriptor_t, ConvolutionDescriptorDeleter()) {
 
-        CHECK_CUDNN_ERROR(cudnnCreateConvolutionDescriptor(desc_.get()));
+        CHECK_CUDNN_ERROR(cudnnCreateConvolutionDescriptor(desc_.get())); 
+#if CUDNN_MAJOR >= 6       
+        CHECK_CUDNN_ERROR(cudnnSetConvolution2dDescriptor(*desc_,
+                                                          pad_h,
+                                                          pad_w,
+                                                          hstride,
+                                                          wstride,
+                                                          1,
+                                                          1,
+                                                          CUDNN_CONVOLUTION,
+                                                          CUDNN_DATA_FLOAT));
+#else   
         CHECK_CUDNN_ERROR(cudnnSetConvolution2dDescriptor(*desc_,
                                                           pad_h,
                                                           pad_w,
@@ -238,6 +249,9 @@ public:
                                                           1,
                                                           1,
                                                           CUDNN_CONVOLUTION));
+        
+#endif
+        
     }
 
     cudnnConvolutionDescriptor_t desc() const { return *desc_; };

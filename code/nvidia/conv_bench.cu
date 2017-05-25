@@ -14,6 +14,8 @@
 #include "tensor.h"
 #include "cudnn_helper.h"
 
+#define USE_GET 0
+
 class cudnnCNN {
     TensorDescriptor4d<float> x_desc_;
     TensorDescriptor4d<float> h_desc_;
@@ -66,6 +68,7 @@ public:
 
         output_dims_ = {out_w, out_h, out_c, out_n};
 
+#if USE_GET
         // Pick forward convolution algorithm
         CHECK_CUDNN_ERROR(cudnnGetConvolutionForwardAlgorithm(cudnn_handle_.handle(),
                                                               x_desc_.desc(),
@@ -75,7 +78,20 @@ public:
                                                               CUDNN_CONVOLUTION_FWD_PREFER_FASTEST,
                                                               0,
                                                               &fwd_algo_));
-
+#else
+       // Pick forward convolution algorithm
+        cudnnConvolutionFwdAlgoPerf_t fwd_perf;
+        int ret_count;
+        CHECK_CUDNN_ERROR(cudnnFindConvolutionForwardAlgorithm(cudnn_handle_.handle(),
+                                                               x_desc_.desc(),
+                                                               w_desc_.desc(),
+                                                               conv_desc_.desc(),
+                                                               h_desc_.desc(),
+                                                               1,
+                                                               &ret_count,
+                                                               &fwd_perf));
+        fwd_algo_ = fwd_perf.algo;
+#endif
         // Set fwd workspace size
         CHECK_CUDNN_ERROR(cudnnGetConvolutionForwardWorkspaceSize(cudnn_handle_.handle(),
                                                                   x_desc_.desc(),
@@ -87,6 +103,7 @@ public:
 
         fwd_workspace_ = zeros(std::vector<int>{static_cast<int>(fwd_workspace_size_ / sizeof(float)), 1});
 
+#if USE_GET
         // Pick backward convolution algorithm
         CHECK_CUDNN_ERROR(cudnnGetConvolutionBackwardFilterAlgorithm(cudnn_handle_.handle(),
                                                                      x_desc_.desc(),
@@ -96,7 +113,18 @@ public:
                                                                      CUDNN_CONVOLUTION_BWD_FILTER_PREFER_FASTEST,
                                                                      0,
                                                                      &bwd_params_algo_));
-
+#else
+        cudnnConvolutionBwdFilterAlgoPerf_t filter_perf;
+        CHECK_CUDNN_ERROR(cudnnFindConvolutionBackwardFilterAlgorithm(cudnn_handle_.handle(),
+                                                                     x_desc_.desc(),
+                                                                     h_desc_.desc(),
+                                                                     conv_desc_.desc(),
+                                                                     w_desc_.desc(),
+                                                                     1,
+                                                                     &ret_count,
+                                                                     &filter_perf));
+        bwd_params_algo_ = filter_perf.algo;
+#endif
         // Backward params workspace
         CHECK_CUDNN_ERROR(cudnnGetConvolutionBackwardFilterWorkspaceSize(cudnn_handle_.handle(),
                                                                          x_desc_.desc(),
@@ -110,6 +138,7 @@ public:
 
         bwd_params_workspace_ = zeros(std::vector<int>{static_cast<int>(bwd_params_workspace_size_ / sizeof(float)), 1});
 
+#if USE_GET
         // Pick backward wrt inputs convolution algorithm
         CHECK_CUDNN_ERROR(cudnnGetConvolutionBackwardDataAlgorithm(cudnn_handle_.handle(),
                                                                    w_desc_.desc(),
@@ -119,7 +148,19 @@ public:
                                                                    CUDNN_CONVOLUTION_BWD_DATA_PREFER_FASTEST,
                                                                    0,
                                                                    &bwd_inputs_algo_));
-
+#else
+        cudnnConvolutionBwdDataAlgoPerf_t data_perf;
+        CHECK_CUDNN_ERROR(cudnnFindConvolutionBackwardDataAlgorithm(cudnn_handle_.handle(),
+                                                                    w_desc_.desc(),
+                                                                    h_desc_.desc(),
+                                                                    conv_desc_.desc(),
+                                                                    x_desc_.desc(),
+                                                                    1,
+                                                                    &ret_count,
+                                                                    &data_perf));
+        bwd_inputs_algo_ = data_perf.algo;
+#endif
+        
         CHECK_CUDNN_ERROR(cudnnGetConvolutionBackwardDataWorkspaceSize(cudnn_handle_.handle(),
                                                                        w_desc_.desc(),
                                                                        h_desc_.desc(),
@@ -149,6 +190,10 @@ public:
             return "FFT_TILING";
         else if (fwd_algo_ == CUDNN_CONVOLUTION_FWD_ALGO_WINOGRAD)
             return "WINOGRAD";
+#if CUDNN_MAJOR >= 6        
+        else if (fwd_algo_ == CUDNN_CONVOLUTION_FWD_ALGO_WINOGRAD_NONFUSED)
+            return "WINOGRAD_NONFUSED";
+#endif
         else {
             std::stringstream ss;
             ss << "Illegal algorithm passed to get_fwd_algo_string. Algo: " << fwd_algo_ << std::endl;
@@ -297,7 +342,7 @@ std::tuple<int, int, int, std::string> time_cnn(
 
 int main(int argc, char **argv) {
 
-    int num_repeats = 100;
+    int num_repeats = 1000;
 
     // Handles to various cuda libraries, structures
     curandGenerator_t curand_gen;

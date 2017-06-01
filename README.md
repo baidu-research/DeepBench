@@ -209,21 +209,21 @@ Results on more hardware platforms will be added once they are available. We wel
 
 | Kernel                 | A Transpose | B Transpose | Application        | Time (ms) | TeraFLOPS | Processor     |
 |------------------------|-------------|-------------|--------------------|--------------|-----------|---------------|
-| M=1760, N=128, K=1760  | N           | N           | Speech Recognition | 0.11         | 7.41      | TitanX Pascal |
+| M=1760, N=128, K=1760  | N           | N           | Speech Recognition | 0.10         | 7.93      | GTX 1080 Ti|
 | M=7860, N=64, K=2560   | N           | N           | Speech Recognition | 0.45         | 5.59      | TitanX Pascal |
-| M=2560, N=64, K=2560   | N           | N           | Speech Recognition | 0.30         | 2.81      | TitanX Pascal |
-| M=5124, N=9124, K=2560 | T           | N           | Speech Recognition | 55.17        | 4.34      | Xeon Phi 7250 |
+| M=2560, N=64, K=2560   | N           | N           | Speech Recognition | 0.16         | 5.31      | Tesla P100 |
+| M=5124, N=9124, K=2560 | T           | N           | Speech Recognition | 29.51        | 8.21      | Tesla P100 |
 | M=3072, N=128, K=1024  | T           | N           | Speech Recognition | 0.13         | 6.01      | TitanX Pascal |
 
 ## Convolution Results
 
-| Input Size                      | Filter Size   | # of Filters | Padding (h, w) | Stride (h, w) | Application        | Total Time (ms) | Fwd TeraFLOPS | Processor     |
-|---------------------------------|---------------|--------------|----------------|---------------|--------------------|-----------------|---------------|---------------|
-| W = 700, H = 161, C = 1, N = 32 | R = 5, S = 20 | 32           | 0, 0           | 2, 2          | Speech Recognition | 2.98            | 6.63          | TitanX Pascal |
-| W = 54, H = 54, C = 64, N = 8   | R = 3, S = 3  | 64           | 1, 1           | 1, 1          | Face Recognition   | 0.63            | 10.55         | TitanX Pascal |
-| W = 224, H = 224, C = 3, N = 16 | R = 3, S = 3  | 64           | 1, 1           | 1, 1          | Computer Vision    | 3.99            | 3.6           | TitanX Pascal |
-| W = 7, H = 7,  C = 512, N = 16  | R = 3, S = 3  | 512          | 1, 1           | 1, 1          | Computer Vision    | 2.93            | 5.88          | TitanX Pascal |
-| W = 28, H = 28, C = 192, N = 16 | R = 5, S = 5  | 32           | 2, 2           | 1, 1          | Computer Vision    | 1.57            | 6.59          | TitanX Pascal |
+| Input Size                        | Filter Size     | # of Filters   | Padding (h, w)   | Stride (h, w)   | Application          | Total Time (ms)   | Fwd TeraFLOPS   | Processor       |
+| --------------------------------- | --------------- | -------------- | ---------------- | --------------- | -------------------- | ----------------- | --------------- | --------------- |
+| W = 700, H = 161, C = 1, N = 32   | R = 5, S = 20   | 32             | 0, 0             | 2, 2            | Speech Recognition   | 2.64              | 6.69            | TitanXp         |
+| W = 54, H = 54, C = 64, N = 8     | R = 3, S = 3    | 64             | 1, 1             | 1, 1            | Face Recognition     | 0.64              | 10.62           | TitanXp         |
+| W = 224, H = 224, C = 3, N = 16   | R = 3, S = 3    | 64             | 1, 1             | 1, 1            | Computer Vision      | 2.40              | 4.26            | Tesla P100      |
+| W = 7, H = 7,  C = 512, N = 16    | R = 3, S = 3    | 512            | 1, 1             | 1, 1            | Computer Vision      | 1.37              | 7.68            | GTX 1080 Ti     |
+| W = 28, H = 28, C = 192, N = 16   | R = 5, S = 5    | 32             | 2, 2             | 1, 1            | Computer Vision      | 1.57              | 6.59            | TitanX Pascal   |
 
 ## Recurrent Ops Results
 
@@ -232,9 +232,9 @@ Results should be available in October.
 
 | Hidden Units | Batch Size | TimeSteps | Recurrent Type | Application         | Total Time (ms) | Fwd TeraFLOPS | Processor     |
 |--------------|------------|-----------|----------------|---------------------|------------|---------------|---------------|
-| 1760         | 64         | 50        | Vanilla        | Speech Recognition  | 8.48       | 1.14          | TitanX Pascal |
-| 2560         | 32         | 50        | Vanilla        | Speech Recognition  | 24.69      | 1.69          | TitanX Pascal |
-| 1024         | 128        | 25        | LSTM           | Machine Translation | 16.90      | 5.41          | TitanX Pascal |
+| 1760         | 16         | 50        | Vanilla        | Speech Recognition  | 7.75       | 1.20          | TitanX Pascal |
+| 2560         | 32         | 50        | Vanilla        | Speech Recognition  | 21.99      | 1.86          | TitanX Maxwell |
+| 1024         | 128        | 25        | LSTM           | Machine Translation | 9.76       | 5.17          | TitanXp |
 
 ## All-Reduce Results
 

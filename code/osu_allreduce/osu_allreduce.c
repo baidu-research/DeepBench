@@ -117,7 +117,7 @@ int main(int argc, char *argv[])
 
     size = options.max_message_size/sizeof(float);
 
-    for (j = 0; j < 4; j++)
+    for (j = 0; j < 5; j++)
     {
         size = problems[j]/sizeof(float);
     //for(size=1; size*sizeof(float)<= options.max_message_size; size *= 2) {

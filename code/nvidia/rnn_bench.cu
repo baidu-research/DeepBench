@@ -300,7 +300,7 @@ int main(int argc, char **argv) {
         std::cout << std::setw(8) << type;
         std::cout << std::setw(8) << hidden_state;
         std::cout << std::setw(8) << batch_size;
-        std::cout << std::setw(8) << 25;
+        std::cout << std::setw(8) << time_steps;
         int fwd_time, bwd_time;
         std::tie(fwd_time, bwd_time) = time_rnn(hidden_state,
                                                 batch_size,

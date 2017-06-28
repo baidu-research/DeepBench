@@ -1,0 +1,3 @@
+[submodule "code/arm/gemmlowp"]
+	path = code/arm/gemmlowp
+	url = https://github.com/google/gemmlowp.git

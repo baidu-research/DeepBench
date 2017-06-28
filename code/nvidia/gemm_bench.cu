@@ -5,6 +5,8 @@
 #include <stdexcept>
 #include <tuple>
 #include <vector>
+#include <cstdint>
+#include <sstream>
 
 #include <cuda.h>
 #include <cublas_v2.h>
@@ -14,19 +16,84 @@
 #include <thrust/fill.h>
 
 #include "tensor.h"
+#include "gemm_problems.h"
 
-int time_gemm(Tensor<float> A, Tensor<float> B, Tensor<float> C, bool a_t, bool b_t, cublasHandle_t cublas_handle) {
+#ifndef PAD_KERNELS
+#define PAD_KERNELS 1
+#endif
+
+/*
+Usage:
+
+The default precision is set based on the architecture and mode.
+
+By default, the program runs the benchmark in training mode.
+
+bin/gemm_bench
+
+To run inference mode, use the following command:
+
+bin/gemm_bench inference
+
+
+To change the precision for training/inference, use:
+
+bin/gemm_bench train <precision>
+bin/gemm_bench inference <precision>
+
+Supported precision types:
+
+For Maxwell GPUS: 
+float for training and inference
+
+For Pascal GPUS:
+float, half for training
+float, half, int8 for inference
+
+*/
+
+template <typename T1, typename T2>
+int time_gemm(Tensor<T1> A, Tensor<T1> B, Tensor<T2> C, bool a_t, bool b_t, cublasHandle_t cublas_handle) {
+
+#if (__CUDACC_VER_MAJOR__ >= 8)
+    const int alpha = 1.f;
+    const int beta  = 1.f;
+#else
     const float alpha = 1.f / static_cast<float>(A.dims()[1]);
     const float beta  = 1.f;
+#endif
 
     int m = C.dims()[0];
     int k = a_t ? A.dims()[0] : A.dims()[1];
     int n = C.dims()[1];
 
     int numRepeats = std::max(std::ceil(1e11 / (m * k * n)), 10.);
+    cublasStatus_t stat;
 
+#if (__CUDACC_VER_MAJOR__ >= 8)
+    cudaDataType_t A_type = CUDA_R_32F;
+    cudaDataType_t B_type = CUDA_R_32F;
+    cudaDataType_t C_type = CUDA_R_32F;
+    cudaDataType_t compute_type = CUDA_R_32F;
+
+    if (std::is_same<T1, uint16_t>::value) {
+        A_type = CUDA_R_16F;
+        B_type = CUDA_R_16F;
+        C_type = CUDA_R_16F;
+    }
+
+    if (std::is_same<T1, uint8_t>::value) {
+        A_type = CUDA_R_8I;
+        B_type = CUDA_R_8I;
+        C_type = CUDA_R_32I;
+        compute_type = CUDA_R_32I;
+    }
+
+#endif
+
+#if (__CUDACC_VER_MAJOR__ < 8)
     // Warm up
-    cublasStatus_t stat = cublasSgemm(cublas_handle,
+    stat = cublasSgemm(cublas_handle,
                 a_t ? CUBLAS_OP_T : CUBLAS_OP_N,
                 b_t ? CUBLAS_OP_T : CUBLAS_OP_N,
                 m,
@@ -37,6 +104,22 @@ int time_gemm(Tensor<float> A, Tensor<float> B, Tensor<float> C, bool a_t, bool 
                 B.begin(), B.dims()[0],
                 &beta,
                 C.begin(), C.dims()[0]);
+#else
+    stat = cublasGemmEx(cublas_handle,
+                a_t ? CUBLAS_OP_T : CUBLAS_OP_N,
+                b_t ? CUBLAS_OP_T : CUBLAS_OP_N,
+                m,
+                n,
+                k,
+                &alpha,
+                A.begin(), A_type, A.dims()[0],
+                B.begin(), B_type, B.dims()[0],
+                &beta,
+                C.begin(), C_type, C.dims()[0],
+                compute_type,
+                CUBLAS_GEMM_DFALT);
+#endif
+
     if (stat != CUBLAS_STATUS_SUCCESS) {
         throw std::runtime_error("sgemm failed");
     }
@@ -46,7 +129,9 @@ int time_gemm(Tensor<float> A, Tensor<float> B, Tensor<float> C, bool a_t, bool 
     auto start = std::chrono::steady_clock::now();
 
     for (int i = 0; i < numRepeats; ++i) {
-        cublasStatus_t stat = cublasSgemm(cublas_handle,
+
+#if (__CUDACC_VER_MAJOR__ < 8)
+        stat = cublasSgemm(cublas_handle,
                     a_t ? CUBLAS_OP_T : CUBLAS_OP_N,
                     b_t ? CUBLAS_OP_T : CUBLAS_OP_N,
                     m,
@@ -57,6 +142,21 @@ int time_gemm(Tensor<float> A, Tensor<float> B, Tensor<float> C, bool a_t, bool 
                     B.begin(), B.dims()[0],
                     &beta,
                     C.begin(), C.dims()[0]);
+#else
+        stat = cublasGemmEx(cublas_handle,
+                    a_t ? CUBLAS_OP_T : CUBLAS_OP_N,
+                    b_t ? CUBLAS_OP_T : CUBLAS_OP_N,
+                    m,
+                    n,
+                    k,
+                    &alpha,
+                    A.begin(), A_type, A.dims()[0],
+                    B.begin(), B_type, B.dims()[0],
+                    &beta,
+                    C.begin(), C_type, C.dims()[0],
+                    compute_type,
+                    CUBLAS_GEMM_DFALT);
+#endif
         if (stat != CUBLAS_STATUS_SUCCESS) {
             throw std::runtime_error("sgemm failed");
         }
@@ -72,6 +172,24 @@ int time_gemm(Tensor<float> A, Tensor<float> B, Tensor<float> C, bool a_t, bool 
 int main(int argc, char **argv) {
     cudaFree(0);
 
+    int inference = 0;
+    if (argc > 1) {
+        std::string inf = "inference";
+        inference = argv[1] == inf ? 1 : 0;
+    }
+
+#if (__CUDACC_VER_MAJOR__ >= 8)
+    std::string precision;
+    if (inference)
+        precision = "int8";
+    else
+        precision = "half";
+#else
+    std::string precision = "float";
+#endif
+    if (argc > 2) {
+        precision = argv[2];
+    }
 
     cublasHandle_t cublas_handle;
     cublasStatus_t status = cublasCreate(&cublas_handle);
@@ -84,107 +202,117 @@ int main(int argc, char **argv) {
     curandCreateGenerator(&curand_gen, CURAND_RNG_PSEUDO_DEFAULT);
     curandSetPseudoRandomGeneratorSeed(curand_gen, 123ULL);
 
-    std::vector<std::tuple<int, int, int, bool, bool>> problems  = {
-        std::make_tuple(1760, 16, 1760, false, false),
-        std::make_tuple(1760, 32, 1760, false, false),
-        std::make_tuple(1760, 64, 1760, false, false),
-        std::make_tuple(1760, 128, 1760, false, false),
-        std::make_tuple(1760, 7000, 1760, false, false),
-        std::make_tuple(2048, 16, 2048, false, false),
-        std::make_tuple(2048, 32, 2048, false, false),
-        std::make_tuple(2048, 64, 2048, false, false),
-        std::make_tuple(2048, 128, 2048, false, false),
-        std::make_tuple(2048, 7000, 2048, false, false),
-        std::make_tuple(2560, 16, 2560, false, false),
-        std::make_tuple(2560, 32, 2560, false, false),
-        std::make_tuple(2560, 64, 2560, false, false),
-        std::make_tuple(2560, 128, 2560, false, false),
-        std::make_tuple(2560, 7000, 2560, false, false),
-        std::make_tuple(4096, 16, 4096, false, false),
-        std::make_tuple(4096, 32, 4096, false, false),
-        std::make_tuple(4096, 64, 4096, false, false),
-        std::make_tuple(4096, 128, 4096, false, false),
-        std::make_tuple(4096, 7000, 4096, false, false),
-        std::make_tuple(1760, 16, 1760, true, false),
-        std::make_tuple(1760, 32, 1760, true, false),
-        std::make_tuple(1760, 64, 1760, true, false),
-        std::make_tuple(1760, 128, 1760, true, false),
-        std::make_tuple(1760, 7000, 1760, true, false),
-        std::make_tuple(2048, 16, 2048, true, false),
-        std::make_tuple(2048, 32, 2048, true, false),
-        std::make_tuple(2048, 64, 2048, true, false),
-        std::make_tuple(2048, 128, 2048, true, false),
-        std::make_tuple(2048, 7000, 2048, true, false),
-        std::make_tuple(2560, 16, 2560, true, false),
-        std::make_tuple(2560, 32, 2560, true, false),
-        std::make_tuple(2560, 64, 2560, true, false),
-        std::make_tuple(2560, 128, 2560, true, false),
-        std::make_tuple(2560, 7000, 2560, true, false),
-        std::make_tuple(4096, 16, 4096, true, false),
-        std::make_tuple(4096, 32, 4096, true, false),
-        std::make_tuple(4096, 64, 4096, true, false),
-        std::make_tuple(4096, 128, 4096, true, false),
-        std::make_tuple(4096, 7000, 4096, true, false),
-        std::make_tuple(1760, 7133, 1760, false, true),
-        std::make_tuple(2048, 7133, 2048, false, true),
-        std::make_tuple(2560, 7133, 2560, false, true),
-        std::make_tuple(4096, 7133, 4096, false, true),
-        std::make_tuple(5124, 9124, 1760, false, false),
-        std::make_tuple(35, 8457, 1760, false, false),
-        std::make_tuple(5124, 9124, 2048, false, false),
-        std::make_tuple(35, 8457, 2048, false, false),
-        std::make_tuple(5124, 9124, 2560, false, false),
-        std::make_tuple(35, 8457, 2560, false, false),
-        std::make_tuple(5124, 9124, 4096, false, false),
-        std::make_tuple(35, 8457, 4096, false, false),
-        std::make_tuple(5124, 9124, 1760, true, false),
-        std::make_tuple(35, 8457, 1760, true, false),
-        std::make_tuple(5124, 9124, 2048, true, false),
-        std::make_tuple(35, 8457, 2048, true, false),
-        std::make_tuple(5124, 9124, 2560, true, false),
-        std::make_tuple(35, 8457, 2560, true, false),
-        std::make_tuple(5124, 9124, 4096, true, false),
-        std::make_tuple(35, 8457, 4096, true, false),
-        std::make_tuple(7680, 16, 2560, false, false),
-        std::make_tuple(7680, 32, 2560, false, false),
-        std::make_tuple(7680, 64, 2560, false, false),
-        std::make_tuple(7680, 128, 2560, false, false),
-        std::make_tuple(7680, 16, 2560, true, false),
-        std::make_tuple(7680, 32, 2560, true, false),
-        std::make_tuple(7680, 64, 2560, true, false),
-        std::make_tuple(7680, 128, 2560, true, false),
-        std::make_tuple(3072, 16, 1024, false, false),
-        std::make_tuple(3072, 32, 1024, false, false),
-        std::make_tuple(3072, 64, 1024, false, false),
-        std::make_tuple(3072, 128, 1024, false, false),
-        std::make_tuple(3072, 16, 1024, true, false),
-        std::make_tuple(3072, 32, 1024, true, false),
-        std::make_tuple(3072, 64, 1024, true, false),
-        std::make_tuple(3072, 128, 1024, true, false),
-        std::make_tuple(3072, 7435, 1024, false, true),
-        std::make_tuple(7680, 5481, 2560, false, true)
-    };
+    if (inference) {
+        std::cout << std::setw(45) << "Running inference benchmark " << std::endl;
+    } else {
+        std::cout << std::setw(45) << "Running training benchmark " << std::endl;
+    }
 
     std::cout << std::setw(30) << "Times" << std::endl;
     std::cout << std::setfill('-') << std::setw(88) << "-" << std::endl;
     std::cout << std::setfill(' ');
-    std::cout << "    m       n      k      a_t     b_t      time (usec) " << std::endl;
-    for (const auto &problem : problems) {
+    std::cout << "    m       n      k      a_t     b_t      precision        time (usec) ";
+
+    if (PAD_KERNELS && precision == "int8" && inference)
+        std::cout << " pad_kerenels  ";
+
+
+    std::cout << std::endl;
+
+    int pad_kernels_count = 0;
+
+    for (const auto &problem : (inference ? inference_server_set : training_set)) {
         int m, n, k;
         bool a_t, b_t;
         std::tie(m, n, k, a_t, b_t) = problem;
+        int time_ms;
+        bool skip_kernel = false;
+        bool need_padding = false;
 
-        auto a = rand({a_t ? k : m, a_t ? m : k}, curand_gen);
-        auto b = rand({b_t ? n : k, b_t ? k : n}, curand_gen);
-        auto c = zeros({m, n});
+
+#if (__CUDACC_VER_MAJOR__ >= 8)
+        int pad_m;
+        pad_m = m;
+        if (precision == "int8") {
+            if (pad_m%4) {
+                pad_kernels_count++;
+                if (PAD_KERNELS) {
+                    pad_dim(pad_m);
+                    need_padding = true;
+                } else {
+                    skip_kernel = true;
+                }
+            }
+        }
+#endif
 
         std::cout << std::setw(7) << m;
         std::cout << std::setw(7) << n;
         std::cout << std::setw(7) << k;
         std::cout << std::setw(7) << a_t ? "t" : "n";
         std::cout << std::setw(7) << b_t ? "t" : "n";
-        std::cout << std::setw(13) << std::setprecision(6) << time_gemm(a, b, c, a_t, b_t, cublas_handle);
+
+        std::stringstream ss;
+        ss << "Unsupported precision requested. Precision: " << precision << " Inference: " << inference;
+
+#if (__CUDACC_VER_MAJOR__ >= 8)
+        if (precision == "int8" & inference) {
+            auto a = rand<uint8_t>({a_t ? k : pad_m, a_t ? pad_m : k}, curand_gen);
+            auto b = rand<uint8_t>({b_t ? n : k, b_t ? k : n}, curand_gen);
+            auto c = zeros<int>({pad_m, n});
+            std::cout << std::setw(14) << precision;
+            if (!skip_kernel)
+                time_ms = time_gemm<uint8_t, int>(a, b, c, a_t, b_t, cublas_handle);
+        } else if (precision == "half") {
+            auto a = rand<uint16_t>({a_t ? k : m, a_t ? m : k}, curand_gen);
+            auto b = rand<uint16_t>({b_t ? n : k, b_t ? k : n}, curand_gen);
+            auto c = zeros<uint16_t>({m, n});
+            std::cout << std::setw(13) << precision;
+            time_ms = time_gemm<uint16_t, uint16_t>(a, b, c, a_t, b_t, cublas_handle);
+        } else if (precision == "float") {
+            auto a = rand<float>({a_t ? k : m, a_t ? m : k}, curand_gen);
+            auto b = rand<float>({b_t ? n : k, b_t ? k : n}, curand_gen);
+            auto c = zeros<float>({m, n});
+            std::cout << std::setw(13) << precision;
+            time_ms = time_gemm<float, float>(a, b, c, a_t, b_t, cublas_handle);
+        } else {
+            throw std::runtime_error(ss.str());
+        }
+#else
+
+        if (precision != "float") {
+            throw std::runtime_error(ss.str());
+        }
+
+        auto a = rand<float>({a_t ? k : m, a_t ? m : k}, curand_gen);
+        auto b = rand<float>({b_t ? n : k, b_t ? k : n}, curand_gen);
+        auto c = zeros<float>({m, n});
+        std::cout << std::setw(13) << precision;
+        time_ms = time_gemm<float, float>(a, b, c, a_t, b_t, cublas_handle);
+#endif
+        std::cout << std::setw(20) << std::setprecision(6);
+
+        if (skip_kernel) {
+            std::cout << "Not Supported";
+        } else {
+            std::cout << time_ms;
+        }
+
+        if (PAD_KERNELS && precision == "int8" && inference) {
+            std::cout << std::setw(10) <<  need_padding;
+        }
+
         std::cout << std::endl;
+    }
+
+    if (precision == "int8") {
+        std::cout << " Total kernels ";
+        if (PAD_KERNELS)
+            std::cout << "padded: " << pad_kernels_count << std::endl;
+        else
+            std::cout << "skipped: " << pad_kernels_count << std::endl;
+
+        std::cout << " Total kernels: " << inference_server_set.size() << std::endl;
     }
 
     cublasDestroy(cublas_handle);

@@ -40,22 +40,48 @@ public:
     std::vector<int> dims() const { return dims_; }
 };
 
-Tensor<float> fill(std::vector<int> dims, float val) {
-     Tensor<float> tensor(dims);
-     thrust::fill(thrust::device_ptr<float>(tensor.begin()),
-                  thrust::device_ptr<float>(tensor.end()), val);
+template <typename T>
+Tensor<T> fill(std::vector<int> dims, float val) {
+     Tensor<T> tensor(dims);
+     thrust::fill(thrust::device_ptr<T>(tensor.begin()),
+                  thrust::device_ptr<T>(tensor.end()), val);
      return tensor;
 }
 
-Tensor<float> zeros(std::vector<int> dims) {
-    Tensor<float> tensor(dims);
-    thrust::fill(thrust::device_ptr<float>(tensor.begin()),
-                 thrust::device_ptr<float>(tensor.end()), 0.f);
+template <typename T>
+Tensor<T> zeros(std::vector<int> dims) {
+    Tensor<T> tensor(dims);
+    thrust::fill(thrust::device_ptr<T>(tensor.begin()),
+                 thrust::device_ptr<T>(tensor.end()), 0.f);
     return tensor;
 }
 
-Tensor<float> rand(std::vector<int> dims, curandGenerator_t curand_gen) {
-    Tensor<float> tensor(dims);
+template <typename T>
+typename std::enable_if<(std::is_same<T, float>::value), Tensor<T>>::type
+rand(std::vector<int> dims, curandGenerator_t curand_gen) {
+    Tensor<T> tensor(dims);
     curandGenerateUniform(curand_gen, tensor.begin(), tensor.size());
     return tensor;
+}
+
+template <typename T>
+typename std::enable_if<!(std::is_same<T, float>::value), Tensor<T>>::type
+rand(std::vector<int> dims, curandGenerator_t curand_gen) {
+
+    Tensor<T> tensor(dims);
+    Tensor<float> tensor_f(dims);
+    curandGenerateUniform(curand_gen, tensor_f.begin(), tensor_f.size());
+
+    thrust::copy(thrust::device_ptr<float>(tensor_f.begin()),
+                 thrust::device_ptr<float>(tensor_f.end()),
+                 thrust::device_ptr<T>(tensor.begin()));
+
+    return tensor;
+}
+
+void pad_dim(int & dim) {
+    if (dim % 4) {
+        int pad = 4 - dim%4;
+        dim += pad;
+    }
 }

@@ -30,7 +30,8 @@ ifeq ($(MKLLIB), mklml_intel)
     EXTRALIB = -L$(MKLROOT)/lib -lmklml_intel
 endif
 ifeq ($(MKLLIB), mkl_rt)
-    EXTRALIB = -L$(MKLROOT)/lib/intel64/ -lmkl_rt
+    EXTRALIB = -L$(MKLROOT)/lib/intel64/ -lmkl_rt \
+			   -Wl,-rpath,$(MKLROOT)/lib/intel64
 endif
 EXTRALIB += -liomp5 -lpthread -lm -ldl
 endif
@@ -42,10 +43,8 @@ ifeq ($(MKLDNNROOT),)
         to the install directory.)
 endif
 EXTRACXXFLAGS = -I$(MKLDNNROOT)/include -DUSE_MKLDNN
-EXTRALIB = -L$(MKLDNNROOT)/lib -lmkldnn
+EXTRALIB = -L$(MKLDNNROOT)/lib -lmkldnn -Wl,-rpath,$(MKLDNNROOT)/lib
 endif
-
-INPUT_H ?= input.h
 
 ifeq ($(DEBUG), 1)
 OPTFLAGS = -O0 -g
@@ -54,7 +53,7 @@ OPTFLAGS = -O3
 endif
 
 CXX      = icpc
-CXXFLAGS = -Wall -std=c++11 $(OPTFLAGS) $(EXTRACXXFLAGS) -DINPUT_H=\"$(INPUT_H)\"
+CXXFLAGS = -Wall -std=c++11 $(OPTFLAGS) $(EXTRACXXFLAGS) -I../../../kernels
 LFLAGS   = -lrt
 OBJS     = std_conv_bench.o
 
@@ -63,7 +62,7 @@ all : std_conv_bench
 std_conv_bench : std_conv_bench.o
 	$(CXX) $(CXXFLAGS) $(LFLAGS) $^  $(EXTRALIB)  -o $@
 
-std_conv_bench.o : std_conv_bench.cpp input.h
+std_conv_bench.o : std_conv_bench.cpp ../../../kernels/conv_problems.h
 	$(CXX) $(CXXFLAGS) -c -o $@ $<
 
 clean :

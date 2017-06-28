@@ -13,14 +13,53 @@
 
 #include "tensor.h"
 #include "cudnn_helper.h"
+#include "conv_problems.h"
 
 #define USE_GET 0
 
-class cudnnCNN {
-    TensorDescriptor4d<float> x_desc_;
-    TensorDescriptor4d<float> h_desc_;
+#ifndef PAD_KERNELS
+#define PAD_KERNELS 1
+#endif
 
-    FilterDescriptor4d<float> w_desc_;
+
+/*
+Usage:
+
+The default precision is set based on the architecture and mode.
+
+By default, the program runs the benchmark in training mode.
+
+bin/conv_bench
+
+To run inference mode, use the following command:
+
+bin/conv_bench inference
+
+
+To change the precision for training/inference, use:
+
+bin/conv_bench train <precision>
+bin/conv_bench inference <precision>
+
+Supported precision types:
+
+For Maxwell GPUS: 
+float for training and inference
+
+For Pascal GPUS:
+float, half for training
+float, half, int8 for inference
+
+*/
+
+// T1 is used as the data type for inputs, weights and outputs. 
+// T2 is used to describe the compute precision. This is used in inference mode in the INT8_CONFIG
+template <typename T1, typename T2>
+class cudnnCNN {
+    TensorDescriptor4d<T1> x_desc_;
+    TensorDescriptor4d<T1> h_desc_;
+
+    FilterDescriptor4d<T1> w_desc_;
 
     std::vector<int> output_dims_;
     int num_repeats_;
@@ -40,20 +79,30 @@ class cudnnCNN {
     const float alpha_ = 1.f;
     const float beta_  = 0.f;
 
-    ConvolutionDescriptor conv_desc_;
+    ConvolutionDescriptor<T2> conv_desc_;
     CudnnHandle cudnn_handle_;
 
 public:
 
     cudnnCNN(int w, int h, int c, int n, int k, int r, int s,
-             int pad_w, int pad_h, int wstride, int hstride)
+             int pad_w, int pad_h, int wstride, int hstride,
+             int inference)
              :
         cudnn_handle_(),
-        x_desc_(CUDNN_TENSOR_NCHW, n, c, h, w),
-        w_desc_(CUDNN_TENSOR_NCHW, k, c, r, s),
         conv_desc_(pad_h, pad_w, hstride, wstride)
     {
         int out_h, out_w, out_c, out_n;
+
+        cudnnTensorFormat_t format;
+        // For int8 inference, the supported format is NHWC
+        if (std::is_same<T1, uint8_t>::value) {
+            format = CUDNN_TENSOR_NHWC;
+        } else {
+            format = CUDNN_TENSOR_NCHW;
+        }
+
+        x_desc_ = TensorDescriptor4d<T1>(format, n, c, h, w);
+        w_desc_ = FilterDescriptor4d<T1>(format, k, c, r, s);
 
         // Get output dimensions
         CHECK_CUDNN_ERROR(cudnnGetConvolution2dForwardOutputDim(conv_desc_.desc(),
@@ -64,11 +113,19 @@ public:
                                                                 &out_h,
                                                                 &out_w));
 
-        h_desc_ = TensorDescriptor4d<float>(CUDNN_TENSOR_NCHW, out_n, out_c, out_h, out_w);
+        if (std::is_same<T1, uint8_t>::value) {
+            h_desc_ = TensorDescriptor4d<T1>(CUDNN_TENSOR_NHWC, out_n, out_c, out_h, out_w);
+        } else {
+            h_desc_ = TensorDescriptor4d<T1>(CUDNN_TENSOR_NCHW, out_n, out_c, out_h, out_w);
+        }
 
         output_dims_ = {out_w, out_h, out_c, out_n};
 
 #if USE_GET
+        if (std::is_same<T1, uint8_t>::value) {
+            //Note: cuDNN only supports IMPLICIT_PRECOMP_GEMM for int8 data type.
+            fwd_algo_ = CUDNN_CONVOLUTION_FWD_ALGO_IMPLICIT_PRECOMP_GEMM;
+        } else {
         // Pick forward convolution algorithm
         CHECK_CUDNN_ERROR(cudnnGetConvolutionForwardAlgorithm(cudnn_handle_.handle(),
                                                               x_desc_.desc(),
@@ -78,98 +135,118 @@ public:
                                                               CUDNN_CONVOLUTION_FWD_PREFER_FASTEST,
                                                               0,
                                                               &fwd_algo_));
+            fwd_algo_ = fwd_perf.algo;
+        }
 #else
        // Pick forward convolution algorithm
         cudnnConvolutionFwdAlgoPerf_t fwd_perf;
         int ret_count;
-        CHECK_CUDNN_ERROR(cudnnFindConvolutionForwardAlgorithm(cudnn_handle_.handle(),
-                                                               x_desc_.desc(),
-                                                               w_desc_.desc(),
-                                                               conv_desc_.desc(),
-                                                               h_desc_.desc(),
-                                                               1,
-                                                               &ret_count,
-                                                               &fwd_perf));
-        fwd_algo_ = fwd_perf.algo;
+
+        if (std::is_same<T1, uint8_t>::value) {
+            //Note: cuDNN only supports IMPLICIT_PRECOMP_GEMM for int8 data type.
+            fwd_algo_ = CUDNN_CONVOLUTION_FWD_ALGO_IMPLICIT_PRECOMP_GEMM;
+        } else {
+            CHECK_CUDNN_ERROR(cudnnFindConvolutionForwardAlgorithm(cudnn_handle_.handle(),
+                                                                   x_desc_.desc(),
+                                                                   w_desc_.desc(),
+                                                                   conv_desc_.desc(),
+                                                                   h_desc_.desc(),
+                                                                   1,
+                                                                   &ret_count,
+                                                                   &fwd_perf));
+            fwd_algo_ = fwd_perf.algo;
+        }
 #endif
-        // Set fwd workspace size
-        CHECK_CUDNN_ERROR(cudnnGetConvolutionForwardWorkspaceSize(cudnn_handle_.handle(),
-                                                                  x_desc_.desc(),
-                                                                  w_desc_.desc(),
-                                                                  conv_desc_.desc(),
-                                                                  h_desc_.desc(),
-                                                                  fwd_algo_,
-                                                                  &fwd_workspace_size_));
+        if (std::is_same<T1, uint8_t>::value) {
+            //Note: cudnn workspace size function doesn't work for INT8_CONFIG
+            fwd_workspace_size_= 1073741824;
+        } else {
+            // Set fwd workspace size
+            CHECK_CUDNN_ERROR(cudnnGetConvolutionForwardWorkspaceSize(cudnn_handle_.handle(),
+                                                                      x_desc_.desc(),
+                                                                      w_desc_.desc(),
+                                                                      conv_desc_.desc(),
+                                                                      h_desc_.desc(),
+                                                                      fwd_algo_,
+                                                                      &fwd_workspace_size_));
+        }
 
-        fwd_workspace_ = zeros(std::vector<int>{static_cast<int>(fwd_workspace_size_ / sizeof(float)), 1});
+        fwd_workspace_ = zeros<float>(std::vector<int>{static_cast<int>(fwd_workspace_size_ / sizeof(float)), 1});
 
+        if (!inference) {
 #if USE_GET
-        // Pick backward convolution algorithm
-        CHECK_CUDNN_ERROR(cudnnGetConvolutionBackwardFilterAlgorithm(cudnn_handle_.handle(),
-                                                                     x_desc_.desc(),
-                                                                     h_desc_.desc(),
-                                                                     conv_desc_.desc(),
-                                                                     w_desc_.desc(),
-                                                                     CUDNN_CONVOLUTION_BWD_FILTER_PREFER_FASTEST,
-                                                                     0,
-                                                                     &bwd_params_algo_));
-#else
-        cudnnConvolutionBwdFilterAlgoPerf_t filter_perf;
-        CHECK_CUDNN_ERROR(cudnnFindConvolutionBackwardFilterAlgorithm(cudnn_handle_.handle(),
-                                                                     x_desc_.desc(),
-                                                                     h_desc_.desc(),
-                                                                     conv_desc_.desc(),
-                                                                     w_desc_.desc(),
-                                                                     1,
-                                                                     &ret_count,
-                                                                     &filter_perf));
-        bwd_params_algo_ = filter_perf.algo;
-#endif
-        // Backward params workspace
-        CHECK_CUDNN_ERROR(cudnnGetConvolutionBackwardFilterWorkspaceSize(cudnn_handle_.handle(),
+            // Pick backward convolution algorithm
+            CHECK_CUDNN_ERROR(cudnnGetConvolutionBackwardFilterAlgorithm(cudnn_handle_.handle(),
                                                                          x_desc_.desc(),
                                                                          h_desc_.desc(),
                                                                          conv_desc_.desc(),
                                                                          w_desc_.desc(),
-                                                                         bwd_params_algo_,
-                                                                         &bwd_params_workspace_size_));
+                                                                         CUDNN_CONVOLUTION_BWD_FILTER_PREFER_FASTEST,
+                                                                         0,
+                                                                         &bwd_params_algo_));
+#else
+            cudnnConvolutionBwdFilterAlgoPerf_t filter_perf;
+
+            if (std::is_same<T1, uint8_t>::value) {
+
+                fwd_algo_ = CUDNN_CONVOLUTION_FWD_ALGO_IMPLICIT_PRECOMP_GEMM;
+
+            }
+            CHECK_CUDNN_ERROR(cudnnFindConvolutionBackwardFilterAlgorithm(cudnn_handle_.handle(),
+                                                                         x_desc_.desc(),
+                                                                         h_desc_.desc(),
+                                                                         conv_desc_.desc(),
+                                                                         w_desc_.desc(),
+                                                                         1,
+                                                                         &ret_count,
+                                                                         &filter_perf));
+            bwd_params_algo_ = filter_perf.algo;
+#endif
+            // Backward params workspace
+            CHECK_CUDNN_ERROR(cudnnGetConvolutionBackwardFilterWorkspaceSize(cudnn_handle_.handle(),
+                                                                             x_desc_.desc(),
+                                                                             h_desc_.desc(),
+                                                                             conv_desc_.desc(),
+                                                                             w_desc_.desc(),
+                                                                             bwd_params_algo_,
+                                                                             &bwd_params_workspace_size_));
 
 
 
-        bwd_params_workspace_ = zeros(std::vector<int>{static_cast<int>(bwd_params_workspace_size_ / sizeof(float)), 1});
+            bwd_params_workspace_ = zeros<float>(std::vector<int>{static_cast<int>(bwd_params_workspace_size_ / sizeof(float)), 1});
 
 #if USE_GET
-        // Pick backward wrt inputs convolution algorithm
-        CHECK_CUDNN_ERROR(cudnnGetConvolutionBackwardDataAlgorithm(cudnn_handle_.handle(),
-                                                                   w_desc_.desc(),
-                                                                   h_desc_.desc(),
-                                                                   conv_desc_.desc(),
-                                                                   x_desc_.desc(),
-                                                                   CUDNN_CONVOLUTION_BWD_DATA_PREFER_FASTEST,
-                                                                   0,
-                                                                   &bwd_inputs_algo_));
-#else
-        cudnnConvolutionBwdDataAlgoPerf_t data_perf;
-        CHECK_CUDNN_ERROR(cudnnFindConvolutionBackwardDataAlgorithm(cudnn_handle_.handle(),
-                                                                    w_desc_.desc(),
-                                                                    h_desc_.desc(),
-                                                                    conv_desc_.desc(),
-                                                                    x_desc_.desc(),
-                                                                    1,
-                                                                    &ret_count,
-                                                                    &data_perf));
-        bwd_inputs_algo_ = data_perf.algo;
-#endif
-        
-        CHECK_CUDNN_ERROR(cudnnGetConvolutionBackwardDataWorkspaceSize(cudnn_handle_.handle(),
+            // Pick backward wrt inputs convolution algorithm
+            CHECK_CUDNN_ERROR(cudnnGetConvolutionBackwardDataAlgorithm(cudnn_handle_.handle(),
                                                                        w_desc_.desc(),
                                                                        h_desc_.desc(),
                                                                        conv_desc_.desc(),
                                                                        x_desc_.desc(),
-                                                                       bwd_inputs_algo_,
-                                                                       &bwd_inputs_workspace_size_));
+                                                                       CUDNN_CONVOLUTION_BWD_DATA_PREFER_FASTEST,
+                                                                       0,
+                                                                       &bwd_inputs_algo_));
+#else
+            cudnnConvolutionBwdDataAlgoPerf_t data_perf;
+            CHECK_CUDNN_ERROR(cudnnFindConvolutionBackwardDataAlgorithm(cudnn_handle_.handle(),
+                                                                        w_desc_.desc(),
+                                                                        h_desc_.desc(),
+                                                                        conv_desc_.desc(),
+                                                                        x_desc_.desc(),
+                                                                        1,
+                                                                        &ret_count,
+                                                                        &data_perf));
+            bwd_inputs_algo_ = data_perf.algo;
+#endif
+            CHECK_CUDNN_ERROR(cudnnGetConvolutionBackwardDataWorkspaceSize(cudnn_handle_.handle(),
+                                                                           w_desc_.desc(),
+                                                                           h_desc_.desc(),
+                                                                           conv_desc_.desc(),
+                                                                           x_desc_.desc(),
+                                                                           bwd_inputs_algo_,
+                                                                           &bwd_inputs_workspace_size_));
 
-        bwd_inputs_workspace_ = zeros(std::vector<int>{static_cast<int>(bwd_inputs_workspace_size_ / sizeof(float)), 1});
+            bwd_inputs_workspace_ = zeros<float>(std::vector<int>{static_cast<int>(bwd_inputs_workspace_size_ / sizeof(float)), 1});
+        }
 
     }
 
@@ -190,10 +267,8 @@ public:
             return "FFT_TILING";
         else if (fwd_algo_ == CUDNN_CONVOLUTION_FWD_ALGO_WINOGRAD)
             return "WINOGRAD";
-#if CUDNN_MAJOR >= 6        
         else if (fwd_algo_ == CUDNN_CONVOLUTION_FWD_ALGO_WINOGRAD_NONFUSED)
             return "WINOGRAD_NONFUSED";
-#endif
         else {
             std::stringstream ss;
             ss << "Illegal algorithm passed to get_fwd_algo_string. Algo: " << fwd_algo_ << std::endl;
@@ -202,7 +277,7 @@ public:
     }
 
 
-    void forward(Tensor<float> x, Tensor<float> filter, Tensor<float> h) {
+    void forward(Tensor<T1> x, Tensor<T1> filter, Tensor<T1> h) {
 
         // Convolution forward.
         CHECK_CUDNN_ERROR(cudnnConvolutionForward(cudnn_handle_.handle(),
@@ -221,7 +296,7 @@ public:
 
     }
 
-    void backward_params(Tensor<float> x, Tensor<float> delta, Tensor<float> dW) {
+    void backward_params(Tensor<T1> x, Tensor<T1> delta, Tensor<T1> dW) {
 
         CHECK_CUDNN_ERROR(cudnnConvolutionBackwardFilter(cudnn_handle_.handle(),
                                                          &alpha_,
@@ -240,7 +315,7 @@ public:
 
     }
 
-    void backward_inputs(Tensor<float> filter, Tensor<float> delta, Tensor<float> dX) {
+    void backward_inputs(Tensor<T1> filter, Tensor<T1> delta, Tensor<T1> dX) {
 
         CHECK_CUDNN_ERROR(cudnnConvolutionBackwardData(cudnn_handle_.handle(),
                                                       &alpha_,
@@ -259,25 +334,27 @@ public:
     }
 };
 
+template <typename T1, typename T2>
 std::tuple<int, int, int, std::string> time_cnn(
          int k, int c, int r, int s,
          int n, int h, int w,
          int pad_h, int pad_w,
          int hstride, int wstride,
          int num_repeats,
-         curandGenerator_t curand_gen
+         curandGenerator_t curand_gen,
+         int inference
         ) {
 
-    cudnnCNN cnn(w, h, c, n, k, r, s, pad_w, pad_h, wstride, hstride);
+    cudnnCNN<T1, T2> cnn(w, h, c, n, k, r, s, pad_w, pad_h, wstride, hstride, inference);
 
     // Allocate memory for filter
-    auto filter = rand(std::vector<int>{r, s, c, k}, curand_gen);
-    
+    auto filter = rand<T1>(std::vector<int>{r, s, c, k}, curand_gen);
+
     // Allocate memory for input
-    auto input = rand(std::vector<int>{w, h, c, n}, curand_gen);
+    auto input = rand<T1>(std::vector<int>{w, h, c, n}, curand_gen);
 
     // Allocate memory for output tensor
-    auto output = zeros(cnn.get_output_dims());
+    auto output = zeros<T1>(cnn.get_output_dims());
 
 
     std::string fwd_algo_s = cnn.get_fwd_algo_string();
@@ -296,45 +373,50 @@ std::tuple<int, int, int, std::string> time_cnn(
     auto end = std::chrono::steady_clock::now();
     int fwd_time = static_cast<int>(std::chrono::duration<double, std::micro>(end - start).count() / num_repeats);
 
-    // Allocate memory for backward pass wrt weights
-    auto delta = rand(cnn.get_output_dims(), curand_gen);
-    auto dW = zeros(std::vector<int>{r, s, c, k});
+    int bwd_inputs_time = 0;
+    int bwd_params_time = 0;
 
-    // Warm up backward
-    cnn.backward_params(input, delta, dW);
+    if (!inference) {
+        // Allocate memory for backward pass wrt weights
+        auto delta = rand<T1>(cnn.get_output_dims(), curand_gen);
+        auto dW = zeros<T1>(std::vector<int>{r, s, c, k});
 
-    cudaDeviceSynchronize();
-    start = std::chrono::steady_clock::now();
-
-    for (int i = 0; i < num_repeats; ++i) {
-        // Backward pass wrt weights
+        // Warm up backward
         cnn.backward_params(input, delta, dW);
-    }
 
-    cudaDeviceSynchronize();
-    end = std::chrono::steady_clock::now();
+        cudaDeviceSynchronize();
+        start = std::chrono::steady_clock::now();
 
-    int bwd_params_time = static_cast<int>(std::chrono::duration<double, std::micro>(end - start).count() / num_repeats);
+        for (int i = 0; i < num_repeats; ++i) {
+            // Backward pass wrt weights
+            cnn.backward_params(input, delta, dW);
+        }
 
-    //Allocate memory for backward pass wrt inputs
-    auto dX = zeros(std::vector<int>{w, h, c, n});
+        cudaDeviceSynchronize();
+        end = std::chrono::steady_clock::now();
 
-    //Warm up backward inputs
-    cnn.backward_inputs(filter, delta, dX);
+        bwd_params_time = static_cast<int>(std::chrono::duration<double, std::micro>(end - start).count() / num_repeats);
 
-    cudaDeviceSynchronize();
-    start = std::chrono::steady_clock::now();
+        //Allocate memory for backward pass wrt inputs
+        auto dX = zeros<T1>(std::vector<int>{w, h, c, n});
 
-    for (int i = 0; i < num_repeats; ++i) {
-        // Backward pass wrt weights
+        //Warm up backward inputs
         cnn.backward_inputs(filter, delta, dX);
 
+        cudaDeviceSynchronize();
+        start = std::chrono::steady_clock::now();
+
+        for (int i = 0; i < num_repeats; ++i) {
+            // Backward pass wrt weights
+            cnn.backward_inputs(filter, delta, dX);
+
+        }
+
+        cudaDeviceSynchronize();
+        end = std::chrono::steady_clock::now();
+
+        bwd_inputs_time = static_cast<int>(std::chrono::duration<double, std::micro>(end - start).count() / num_repeats);
     }
-
-    cudaDeviceSynchronize();
-    end = std::chrono::steady_clock::now();
-
-    int bwd_inputs_time = static_cast<int>(std::chrono::duration<double, std::micro>(end - start).count() / num_repeats);
 
     return std::tuple<int, int, int, std::string>(fwd_time, bwd_inputs_time, bwd_params_time, fwd_algo_s);
 
@@ -342,7 +424,28 @@ std::tuple<int, int, int, std::string> time_cnn(
 
 int main(int argc, char **argv) {
 
-    int num_repeats = 1000;
+    int num_repeats = 300;
+
+    int inference = 0;
+
+    if (argc > 1) {
+        std::string inf = "inference";
+        inference = argv[1] == inf ? 1 : 0;
+    }
+
+
+#if CUDNN_MAJOR >= 6
+    std::string precision;
+    if (inference)
+        precision = "int8";
+    else
+        precision = "half";
+#else
+    std::string precision = "float";
+#endif
+    if (argc > 2) {
+        precision = argv[2];
+    }
 
     // Handles to various cuda libraries, structures
     curandGenerator_t curand_gen;
@@ -350,63 +453,38 @@ int main(int argc, char **argv) {
 
     cudaFree(0);
 
-    if (argc > 1)
-        num_repeats = atoi(argv[1]);
-
-
     // Initialize curand_gen and set appropriate seed.
     curandCreateGenerator(&curand_gen, CURAND_RNG_PSEUDO_DEFAULT);
     curandSetPseudoRandomGeneratorSeed(curand_gen, 123ULL);
 
 
-    // Vector saves w, h, c, n, k, r, s, pad_w, pad_h, wstride, hstride
-    std::vector<std::tuple<int, int, int, int, int, int, int, int, int, int, int>> problems = {
-        std::make_tuple(700, 161, 1, 4, 32, 5, 20, 0, 0, 2, 2),
-        std::make_tuple(700, 161, 1, 8, 32, 5, 20, 0, 0, 2, 2),
-        std::make_tuple(700, 161, 1, 16, 32, 5, 20, 0, 0, 2, 2),
-        std::make_tuple(700, 161, 1, 32, 32, 5, 20, 0, 0, 2, 2),
-        std::make_tuple(341, 79, 32, 4, 32, 5, 10, 0, 0, 2, 2),
-        std::make_tuple(341, 79, 32, 8, 32, 5, 10, 0, 0, 2, 2),
-        std::make_tuple(341, 79, 32, 16, 32, 5, 10, 0, 0, 2, 2),
-        std::make_tuple(341, 79, 32, 32, 32, 5, 10, 0, 0, 2, 2),
-        std::make_tuple(480, 48, 1, 16, 16, 3, 3, 1, 1, 1, 1),
-        std::make_tuple(240, 24, 16, 16, 32, 3, 3, 1, 1, 1, 1),
-        std::make_tuple(120, 12, 32, 16, 64, 3, 3, 1, 1, 1, 1),
-        std::make_tuple(60, 6, 64, 16, 128, 3, 3, 1, 1, 1, 1),
-        std::make_tuple(108, 108, 3, 8, 64, 3, 3, 1, 1, 2, 2),
-        std::make_tuple(54, 54, 64, 8, 64, 3, 3, 1, 1, 1, 1),
-        std::make_tuple(27, 27, 128, 8, 128, 3, 3, 1, 1, 1, 1),
-        std::make_tuple(14, 14, 128, 8, 256, 3, 3, 1, 1, 1, 1),
-        std::make_tuple(7, 7, 256, 8, 512, 3, 3, 1, 1, 1, 1),
-        std::make_tuple(224, 224, 3, 8, 64, 3, 3, 1, 1, 1, 1),
-        std::make_tuple(112, 112, 64, 8, 128, 3, 3, 1, 1, 1, 1),
-        std::make_tuple(56, 56, 128, 8, 256, 3, 3, 1, 1, 1, 1),
-        std::make_tuple(28, 28, 256, 8, 512, 3, 3, 1, 1, 1, 1),
-        std::make_tuple(14, 14, 512, 8, 512, 3, 3, 1, 1, 1, 1),
-        std::make_tuple(7, 7, 512, 8, 512, 3, 3, 1, 1, 1, 1),
-        std::make_tuple(224, 224, 3, 16, 64, 3, 3, 1, 1, 1, 1),
-        std::make_tuple(112, 112, 64, 16, 128, 3, 3, 1, 1, 1, 1),
-        std::make_tuple(56, 56, 128, 16, 256, 3, 3, 1, 1, 1, 1),
-        std::make_tuple(28, 28, 256, 16, 512, 3, 3, 1, 1, 1, 1),
-        std::make_tuple(14, 14, 512, 16, 512, 3, 3, 1, 1, 1, 1),
-        std::make_tuple(7, 7, 512, 16, 512, 3, 3, 1, 1, 1, 1),
-        std::make_tuple(224, 224, 3, 16, 64, 7, 7, 3, 3, 2, 2),
-        std::make_tuple(28, 28, 192, 16, 32, 5, 5, 2, 2, 1, 1),
-        std::make_tuple(28, 28, 192, 16, 64, 1, 1, 0, 0, 1, 1),
-        std::make_tuple(14, 14, 512, 16, 48, 5, 5, 2, 2, 1, 1),
-        std::make_tuple(14, 14, 512, 16, 192, 1, 1, 0, 0, 1, 1),
-        std::make_tuple(7, 7, 832, 16, 256, 1, 1, 0, 0, 1, 1),
-        std::make_tuple(7, 7, 832, 16, 128, 5, 5, 2, 2, 1, 1)
-    };
+    if (inference) {
+        std::cout << std::setw(45) << "Running inference benchmark " << std::endl;
+    } else {
+        std::cout << std::setw(45) << "Running training benchmark " << std::endl;
+    }
 
     std::cout << std::setw(30) << "Times" << std::endl;
     std::cout << std::setfill('-') << std::setw(190) << "-" << std::endl;
     std::cout << std::setfill(' ');
-    std::cout << "   w      h      c      n      k      r      s    pad_w  pad_h    stride_w  stride_h    fwd_time (usec)  bwd_inputs_time (usec)  bwd_params_time (usec)  total_time (usec)   fwd_algo " << std::endl;
-    std::cout << std::setfill('-') << std::setw(190) << "-" << std::endl;
+    std::cout << "   w      h      c      n      k      r      s    pad_w  pad_h    stride_w  stride_h    precision  fwd_time (usec)  ";
+
+    if (!inference) {
+        std::cout << "bwd_inputs_time (usec)  bwd_params_time (usec)  ";
+        std::cout << "total_time (usec)";
+    }
+
+    if (PAD_KERNELS && precision == "int8" && inference)
+        std::cout << " pad_kerenels  ";
+
+    std::cout << "   fwd_algo " << std::endl;
+
+    std::cout << std::setfill('-') << std::setw(200) << "-" << std::endl;
     std::cout << std::setfill(' ');
 
-    for (const auto &problem : problems) {
+    int pad_kernels_count = 0;
+
+    for (const auto &problem : (inference ? inference_server_set : training_set)) {
 
         // Filter parameters
         int k, c, r, s;
@@ -422,11 +500,58 @@ int main(int argc, char **argv) {
 
         std::tie(w, h, c, n, k, r, s, pad_w, pad_h, wstride, hstride) = problem;
 
+        bool skip_kernel = false;
+        bool need_padding = false;
+
+#if CUDNN_MAJOR >= 6
+        int padded_c, padded_w, padded_h;
+
+        padded_c = c;
+        padded_h = h;
+        padded_w = w;
+
+        if (precision == "int8") {
+            if (c%4 || w%4 || h%4) {
+                pad_kernels_count++;
+                if (PAD_KERNELS) {
+                    pad_dim(padded_c);
+                    pad_dim(padded_h);
+                    pad_dim(padded_w);
+                    need_padding = true;
+                } else {
+                    skip_kernel = true;
+                }
+            }
+        }
+#endif
+
         int fwd_time, bwd_inputs_time, bwd_params_time;
         std::string fwd_algo_s;
 
-        std::tie(fwd_time, bwd_inputs_time, bwd_params_time, fwd_algo_s) = 
-            time_cnn(k, c, r, s, n, h, w, pad_h, pad_w, hstride, wstride, num_repeats, curand_gen);
+        std::stringstream ss;
+        ss << "Unsupported precision requested. Precision: " << precision << " Inference: " << inference;
+
+#if CUDNN_MAJOR >= 6
+        if (precision == "float") {
+            std::tie(fwd_time, bwd_inputs_time, bwd_params_time, fwd_algo_s) =
+                time_cnn<float, float>(k, c, r, s, n, h, w, pad_h, pad_w, hstride, wstride, num_repeats, curand_gen, inference);
+        } else if (precision == "half") {
+            std::tie(fwd_time, bwd_inputs_time, bwd_params_time, fwd_algo_s) =
+                time_cnn<uint16_t, uint16_t>(k, c, r, s, n, h, w, pad_h, pad_w, hstride, wstride, num_repeats, curand_gen, inference);
+        } else if ((precision == "int8") && inference) {
+            if (!skip_kernel) {
+                std::tie(fwd_time, bwd_inputs_time, bwd_params_time, fwd_algo_s) =
+                    time_cnn<uint8_t, int>(k, padded_c, r, s, n, padded_h, padded_w, pad_h, pad_w, hstride, wstride, num_repeats, curand_gen, inference);
+            }
+        } else {
+            throw std::runtime_error(ss.str());
+        }
+#else
+        if (precision != "float")
+            throw std::runtime_error(ss.str());
+        std::tie(fwd_time, bwd_inputs_time, bwd_params_time, fwd_algo_s) =
+            time_cnn<float, float>(k, c, r, s, n, h, w, pad_h, pad_w, hstride, wstride, num_repeats, curand_gen, inference);
+#endif
 
         std::cout << std::setw(5) << w;
         std::cout << std::setw(7) << h;
@@ -439,15 +564,37 @@ int main(int argc, char **argv) {
         std::cout << std::setw(8) << pad_h;
         std::cout << std::setw(10) << wstride;
         std::cout << std::setw(10) << hstride;
-        std::cout << std::setw(14) << std::setprecision(7) << fwd_time;
-        std::cout << std::setw(24) << std::setprecision(7) << bwd_inputs_time;
-        std::cout << std::setw(24) << std::setprecision(7) << bwd_params_time;
-        std::cout << std::setw(19) << std::setprecision(8) << fwd_time + bwd_inputs_time + bwd_params_time;
+        std::cout << std::setw(10) << precision;
+        std::cout << std::setw(15) << std::setprecision(7);
+
+        if (skip_kernel) {
+            std::cout << "Not Supported";
+        } else {
+            std::cout << fwd_time;
+        }
+
+        if (PAD_KERNELS && precision == "int8" && inference) {
+            std::cout << std::setw(15) <<  need_padding;
+        }
+
+        if (!inference) {
+            std::cout << std::setw(24) << std::setprecision(7) << bwd_inputs_time;
+            std::cout << std::setw(24) << std::setprecision(7) << bwd_params_time;
+            std::cout << std::setw(19) << std::setprecision(8) << fwd_time + bwd_inputs_time + bwd_params_time;
+        }
 
         std::cout << std::setw(25) << fwd_algo_s;
-
         std::cout << std::endl;
+    }
 
+    if (precision == "int8") {
+        std::cout << " Total kernels ";
+        if (PAD_KERNELS)
+            std::cout << "padded: " << pad_kernels_count << std::endl;
+        else
+            std::cout << "skipped: " << pad_kernels_count << std::endl;
+
+        std::cout << " Total kernels: " << inference_server_set.size() << std::endl;
     }
 
     // Destroy all the handles

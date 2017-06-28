@@ -12,6 +12,38 @@
 
 #include "tensor.h"
 #include "cudnn_helper.h"
+#include "rnn_problems.h"
+
+/*
+Usage:
+
+The default precision is set based on the architecture and mode.
+
+By default, the program runs the benchmark in training mode.
+
+bin/rnn_bench
+
+To run inference mode, use the following command:
+
+bin/rnn_bench inference
+
+
+To change the precision for training/inference, use:
+
+bin/rnn_bench train <precision>
+bin/rnn_bench inference <precision>
+
+Supported precision types:
+
+For Maxwell GPUS:
+float for training and inference
+
+For Pascal GPUS:
+float, half for training
+float, half, int8 for inference
+
+*/
+
 
 cudnnHandle_t cudnn_handle;
 curandGenerator_t curand_gen;
@@ -49,32 +81,33 @@ class cudnnDropout {
     cudnnDropoutDescriptor_t desc() const { return *dropout_desc_; }
 };
 
+template <typename T>
 class cudnnRNN {
-    RNNDescriptor<float> rnn_desc_;
-    FilterDescriptorNd<float> wDesc_;
+    RNNDescriptor<T> rnn_desc_;
+    FilterDescriptorNd<T> wDesc_;
     cudnnDropout dropout_;
 
     int time_steps_;
 
-    TensorDescriptorNdArray<float> xDescArray_;
-    TensorDescriptorNdArray<float> yDescArray_;
-    TensorDescriptorNdArray<float> dxDescArray_;
-    TensorDescriptorNdArray<float> dyDescArray_;
+    TensorDescriptorNdArray<T> xDescArray_;
+    TensorDescriptorNdArray<T> yDescArray_;
+    TensorDescriptorNdArray<T> dxDescArray_;
+    TensorDescriptorNdArray<T> dyDescArray_;
 
-    TensorDescriptorNd<float> hx_desc_;
-    TensorDescriptorNd<float> hy_desc_;
-    TensorDescriptorNd<float> dhx_desc_;
-    TensorDescriptorNd<float> dhy_desc_;
-    TensorDescriptorNd<float> cx_desc_;
-    TensorDescriptorNd<float> cy_desc_;
-    TensorDescriptorNd<float> dcx_desc_;
-    TensorDescriptorNd<float> dcy_desc_;
+    TensorDescriptorNd<T> hx_desc_;
+    TensorDescriptorNd<T> hy_desc_;
+    TensorDescriptorNd<T> dhx_desc_;
+    TensorDescriptorNd<T> dhy_desc_;
+    TensorDescriptorNd<T> cx_desc_;
+    TensorDescriptorNd<T> cy_desc_;
+    TensorDescriptorNd<T> dcx_desc_;
+    TensorDescriptorNd<T> dcy_desc_;
 
     size_t weight_size_;
     size_t workspace_size_;
     size_t train_size_;
 
-    Tensor<float> weights_;
+    Tensor<T> weights_;
     Tensor<float> workspace_;
     Tensor<float> trainspace_;
 
@@ -97,24 +130,35 @@ class cudnnRNN {
         {
 
 
-            rnn_desc_ = RNNDescriptor<float>(hidden_size,
+            rnn_desc_ = RNNDescriptor<T>(hidden_size,
                                              1,
                                              dropout_.desc(),
                                              CUDNN_SKIP_INPUT,
                                              CUDNN_UNIDIRECTIONAL,
                                              rnn_type);
+            cudnnDataType_t type;
+            if (std::is_same<T, float>::value)
+                type = CUDNN_DATA_FLOAT;
+#if CUDNN_MAJOR >= 6
+            else if (std::is_same<T, uint8_t>::value)
+                type = CUDNN_DATA_INT8;
+#endif
+            else if (std::is_same<T, uint16_t>::value)
+                type= CUDNN_DATA_HALF;
+            else 
+                throw std::runtime_error("Unknown type in cudnnRNN constructor.");
 
             CHECK_CUDNN_ERROR( cudnnGetRNNParamsSize(cudnn_handle,
                                                      rnn_desc_.desc(),
                                                      xDescArray_.ptr()[0],
                                                      &weight_size_,
-                                                     CUDNN_DATA_FLOAT) );
+                                                     type) );
 
-            weights_ = rand(std::vector<int>{static_cast<int>(weight_size_ / sizeof(float)), 1}, curand_gen);
+            weights_ = rand<T>(std::vector<int>{static_cast<int>(weight_size_ / sizeof(T)), 1}, curand_gen);
 
 
             std::vector<int> dim = {weights_.size(), 1, 1};
-            wDesc_ = FilterDescriptorNd<float>(CUDNN_TENSOR_NCHW, dim);
+            wDesc_ = FilterDescriptorNd<T>(CUDNN_TENSOR_NCHW, dim);
 
             CHECK_CUDNN_ERROR( cudnnGetRNNWorkspaceSize(cudnn_handle,
                                                         rnn_desc_.desc(),
@@ -122,17 +166,17 @@ class cudnnRNN {
                                                         xDescArray_.ptr(),
                                                         &workspace_size_) );
 
-            workspace_ = zeros(std::vector<int>{static_cast<int>(workspace_size_ / sizeof(float)), 1});
+            workspace_ = zeros<float>(std::vector<int>{static_cast<int>(workspace_size_ / sizeof(float)), 1});
 
             CHECK_CUDNN_ERROR( cudnnGetRNNTrainingReserveSize(cudnn_handle,
                                                               rnn_desc_.desc(),
                                                               time_steps,
                                                               xDescArray_.ptr(),
                                                               &train_size_) );
-            trainspace_ = zeros(std::vector<int>{static_cast<int>(train_size_ / sizeof(float)), 1});
+            trainspace_ = zeros<float>(std::vector<int>{static_cast<int>(train_size_ / sizeof(float)), 1});
         }
-        void forward(Tensor<float> x, Tensor<float> hx, Tensor<float> cx,
-                     Tensor<float> y, Tensor<float> hy, Tensor<float> cy) {
+        void forward(Tensor<T> x, Tensor<T> hx, Tensor<T> cx,
+                     Tensor<T> y, Tensor<T> hy, Tensor<T> cy) {
             CHECK_CUDNN_ERROR( cudnnRNNForwardTraining(cudnn_handle,
                                                        rnn_desc_.desc(),
                                                        time_steps_,
@@ -155,9 +199,9 @@ class cudnnRNN {
                                                        (void *)trainspace_.begin(),
                                                        train_size_) );
         }
-        void backward_data(Tensor<float> y, Tensor<float> dy, Tensor<float> dhy,
-                           Tensor<float> dcy, Tensor<float> hx, Tensor<float> cx,
-                           Tensor<float> dx, Tensor<float> dhx, Tensor<float> dcx) {
+        void backward_data(Tensor<T> y, Tensor<T> dy, Tensor<T> dhy,
+                           Tensor<T> dcy, Tensor<T> hx, Tensor<T> cx,
+                           Tensor<T> dx, Tensor<T> dhx, Tensor<T> dcx) {
             CHECK_CUDNN_ERROR( cudnnRNNBackwardData(cudnn_handle,
                                                     rnn_desc_.desc(),
                                                     time_steps_,
@@ -188,26 +232,28 @@ class cudnnRNN {
         }
 };
 
+template <typename T>
 std::tuple<int, int> time_rnn(int hidden_size,
                               int batch_size,
                               int time_steps,
-                              const std::string& type) {
+                              const std::string& type,
+                              int inference) {
 
-    cudnnRNN rnn(hidden_size, batch_size, time_steps, type);
+    cudnnRNN<T> rnn(hidden_size, batch_size, time_steps, type);
 
-    auto x  = rand({hidden_size, batch_size * time_steps}, curand_gen);
-    auto y  = rand({hidden_size, batch_size * time_steps}, curand_gen);
-    auto dx = rand({hidden_size, batch_size * time_steps}, curand_gen);
-    auto dy = rand({hidden_size, batch_size * time_steps}, curand_gen);
+    auto x  = rand<T>({hidden_size, batch_size * time_steps}, curand_gen);
+    auto y  = rand<T>({hidden_size, batch_size * time_steps}, curand_gen);
+    auto dx = rand<T>({hidden_size, batch_size * time_steps}, curand_gen);
+    auto dy = rand<T>({hidden_size, batch_size * time_steps}, curand_gen);
 
-    auto hx = rand({hidden_size, batch_size}, curand_gen);
-    auto hy = rand({hidden_size, batch_size}, curand_gen);
-    auto cx = rand({hidden_size, batch_size}, curand_gen);
-    auto cy = rand({hidden_size, batch_size}, curand_gen);
-    auto dhx = rand({hidden_size, batch_size}, curand_gen);
-    auto dhy = rand({hidden_size, batch_size}, curand_gen);
-    auto dcx = rand({hidden_size, batch_size}, curand_gen);
-    auto dcy = rand({hidden_size, batch_size}, curand_gen);
+    auto hx = rand<T>({hidden_size, batch_size}, curand_gen);
+    auto hy = rand<T>({hidden_size, batch_size}, curand_gen);
+    auto cx = rand<T>({hidden_size, batch_size}, curand_gen);
+    auto cy = rand<T>({hidden_size, batch_size}, curand_gen);
+    auto dhx = rand<T>({hidden_size, batch_size}, curand_gen);
+    auto dhy = rand<T>({hidden_size, batch_size}, curand_gen);
+    auto dcx = rand<T>({hidden_size, batch_size}, curand_gen);
+    auto dcy = rand<T>({hidden_size, batch_size}, curand_gen);
 
     int numRepeats = 100;
 
@@ -226,23 +272,27 @@ std::tuple<int, int> time_rnn(int hidden_size,
     auto end = std::chrono::steady_clock::now();
 
     auto forward_time = std::chrono::duration<double, std::micro>(end - start).count() / numRepeats;
+    int backward_time = 0;
 
-    //Warm up
-    rnn.backward_data(y, dy, dhy, dcy,
-                      hx, cx, dx, dhx, dcx);
-
-    cudaDeviceSynchronize();
-
-    start = std::chrono::steady_clock::now();
-
-    for (int i = 0; i < numRepeats; ++i) {
+    if (!inference) {
+        //Warm up
         rnn.backward_data(y, dy, dhy, dcy,
                           hx, cx, dx, dhx, dcx);
-    }
-    cudaDeviceSynchronize();
 
-    end = std::chrono::steady_clock::now();
-    auto backward_time = std::chrono::duration<double, std::micro>(end - start).count() / numRepeats;
+        cudaDeviceSynchronize();
+
+        start = std::chrono::steady_clock::now();
+
+        for (int i = 0; i < numRepeats; ++i) {
+            rnn.backward_data(y, dy, dhy, dcy,
+                              hx, cx, dx, dhx, dcx);
+        }
+        cudaDeviceSynchronize();
+
+        end = std::chrono::steady_clock::now();
+        backward_time = std::chrono::duration<double, std::micro>(end - start).count() / numRepeats;
+
+    }
 
     return std::make_tuple(static_cast<int>(forward_time),
                            static_cast<int>(backward_time));
@@ -256,58 +306,110 @@ int main(int argc, char **argv) {
     curandCreateGenerator(&curand_gen, CURAND_RNG_PSEUDO_DEFAULT);
     curandSetPseudoRandomGeneratorSeed(curand_gen, 123ULL);
 
-    std::vector<std::tuple<int, int, int, bool>> problems  = {
-        std::make_tuple(1760, 16, 50, false),
-        std::make_tuple(1760, 32, 50, false),
-        std::make_tuple(1760, 64, 50, false),
-        std::make_tuple(1760, 128, 50, false),
-        std::make_tuple(2048, 16, 50, false),
-        std::make_tuple(2048, 32, 50, false),
-        std::make_tuple(2048, 64, 50, false),
-        std::make_tuple(2048, 128, 50, false),
-        std::make_tuple(2560, 16, 50, false),
-        std::make_tuple(2560, 32, 50, false),
-        std::make_tuple(2560, 64, 50, false),
-        std::make_tuple(2560, 128, 50, false),
-        std::make_tuple(512, 16, 25, true),
-        std::make_tuple(512, 32, 25, true),
-        std::make_tuple(512, 64, 25, true),
-        std::make_tuple(512, 128, 25, true),
-        std::make_tuple(1024, 16, 25, true),
-        std::make_tuple(1024, 32, 25, true),
-        std::make_tuple(1024, 64, 25, true),
-        std::make_tuple(1024, 128, 25, true),
-        std::make_tuple(2048, 16, 25, true),
-        std::make_tuple(2048, 32, 25, true),
-        std::make_tuple(2048, 64, 25, true),
-        std::make_tuple(2048, 128, 25, true),
-        std::make_tuple(4096, 16, 25, true),
-        std::make_tuple(4096, 32, 25, true),
-        std::make_tuple(4096, 64, 25, true),
-        std::make_tuple(4096, 128, 25, true)
-    };
+    int inference = 0;
+
+    if (argc > 1) {
+        std::string inf = "inference";
+        inference = argv[1] == inf ? 1 : 0;
+    }
+
+
+#if CUDNN_MAJOR >= 6
+    std::string precision;
+    if (inference)
+        precision = "int8";
+    else
+        precision = "half";
+#else
+    std::string precision = "float";
+#endif
+    if (argc > 2) {
+        precision = argv[2];
+    }
+
+    if (inference) {
+        std::cout << std::setw(45) << "Running inference benchmark " << std::endl;
+    } else {
+        std::cout << std::setw(45) << "Running training benchmark " << std::endl;
+    }
 
     std::cout << std::setw(30) << "Times" << std::endl;
     std::cout << std::setfill('-') << std::setw(88) << "-" << std::endl;
     std::cout << std::setfill(' ');
-    std::cout << "    type    hidden   N     timesteps      fwd_time (usec)   bwd_time (usec)" << std::endl;
-    for (const auto &problem : problems) {
+    std::cout << "    type    hidden   N     timesteps   precision     fwd_time (usec)   ";
+    if (!inference)
+        std::cout << "bwd_time (usec)";
+    std::cout << std::endl;
+    for (const auto &problem : (inference ? inference_server_set : training_set)) {
         int hidden_state, batch_size, time_steps;
-        bool lstm;
-        std::tie(hidden_state, batch_size, time_steps, lstm) = problem;
-        std::string type = lstm ? "lstm" : "vanilla";
+        std::string type;
+        std::tie(hidden_state, batch_size, time_steps, type) = problem;
 
         std::cout << std::setw(8) << type;
         std::cout << std::setw(8) << hidden_state;
         std::cout << std::setw(8) << batch_size;
         std::cout << std::setw(8) << time_steps;
+        std::cout << std::setw(14) << precision;
         int fwd_time, bwd_time;
-        std::tie(fwd_time, bwd_time) = time_rnn(hidden_state,
-                                                batch_size,
-                                                time_steps,
-                                                type);
+
+        std::stringstream ss;
+        ss << "Unsupported precision requested. Precision: " << precision << " Inference: " << inference;
+
+#if CUDNN_MAJOR >= 6
+        if (inference) {
+            if (precision == "float") {
+                std::tie(fwd_time, bwd_time) = time_rnn<float>(hidden_state,
+                                                               batch_size,
+                                                               time_steps,
+                                                               type,
+                                                               inference);
+
+            } else if (precision == "half") {
+                std::tie(fwd_time, bwd_time) = time_rnn<uint16_t>(hidden_state,
+                                                                  batch_size,
+                                                                  time_steps,
+                                                                  type,
+                                                                  inference);
+            } else if (precision == "int8") {
+                std::tie(fwd_time, bwd_time) = time_rnn<uint8_t>(hidden_state,
+                                                                 batch_size,
+                                                                 time_steps,
+                                                                 type,
+                                                                 inference);
+            } else {
+                throw std::runtime_error(ss.str());
+            }
+        } else {
+            if (precision == "float") {
+                std::tie(fwd_time, bwd_time) = time_rnn<float>(hidden_state,
+                                                               batch_size,
+                                                               time_steps,
+                                                               type,
+                                                               inference);
+
+            } else if (precision == "half") {
+                std::tie(fwd_time, bwd_time) = time_rnn<uint16_t>(hidden_state,
+                                                                  batch_size,
+                                                                  time_steps,
+                                                                  type,
+                                                                  inference);
+            } else {
+                throw std::runtime_error(ss.str());
+            }
+        }
+#else
+        if (precision != "float")
+            throw std::runtime_error(ss.str());
+        std::tie(fwd_time, bwd_time) = time_rnn<float>(hidden_state,
+                                                       batch_size,
+                                                       time_steps,
+                                                       type,
+                                                       inference);
+#endif
+
         std::cout << std::setw(18) << fwd_time;
-        std::cout << std::setw(18) << bwd_time;
+        if (!inference)
+            std::cout << std::setw(18) << bwd_time;
         std::cout << std::endl;
     }
 

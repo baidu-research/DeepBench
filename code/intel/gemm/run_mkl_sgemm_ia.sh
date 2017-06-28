@@ -1,5 +1,3 @@
-#!/bin/bash
-
 #******************************************************************************
 # Copyright 2016-2017 Intel Corporation
 #
@@ -16,14 +14,29 @@
 # limitations under the License.
 #*******************************************************************************
 
+#!/bin/bash
+
+echo "Please source appropriate versions of Intel Compiler (ICC), Intel MPI and  Intel MKL !"
+#source <ICC_INSTALDIR>
+#source <MKL_INSTALDIR>
+#source <IMPI_INSTALDIR>
+
+# Intel Xeon Phi Settings
+export KMP_PLACE_THREADS=1T
+export KMP_AFFINITY=compact,granularity=fine
+export OMP_NUM_THREADS=66
+
+echo " SGEMM benchmark"
+make clean &> /dev/null;
+make &> /dev/null;
+echo "------------------------"
+echo "  SGEMM - "
+echo "--------------"
 echo " "
-echo " Convolution benchmark"
-cd mkl_conv
-pwd
-sh ./run_mkl_conv_ia.sh
+numactl -m 1 ./sbench
 echo " "
-cd ../libxsmm_conv
-pwd
+echo "------------------------"
+echo " Packed SGEMM - "
+echo "--------------"
 echo " "
-sh ./run_libxsmm_conv_ia.sh
-cd ..
+numactl -m 1 ./sbench_pack

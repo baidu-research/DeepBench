@@ -1,5 +1,7 @@
+#!/bin/bash
+
 #******************************************************************************
-# Copyright 2016 Intel Corporation
+# Copyright 2016-2017 Intel Corporation
 #
 # Licensed under the Apache License, Version 2.0 (the "License");
 # you may not use this file except in compliance with the License.
@@ -14,21 +16,24 @@
 # limitations under the License.
 #*******************************************************************************
 
-#!/bin/bash
-echo "Please source appropriate versions of Intel Compiler (ICC), Intel MPI and  Intel MKL !"
-#source <ICC_INSTALDIR>
-#source <MKL_INSTALDIR>
-#source <IMPI_INSTALDIR>
+echo "Please source appropriate versions of Intel Compiler (ICC) and " \
+    "Intel MKL, and build MKL-DNN 0.9 or later"
+# source <ICC_INSTALDIR>
+# source <MKL_INSTALDIR>
+# export DNNROOT=<MKLDNN_INSTALL_DIR>
 
-export KMP_PLACE_THREADS=1T
+export LD_LIBRARY_PATH=$DNNROOT/lib:$LD_LIBRARY_PATH
+
+export KMP_HW_SUBSET=1T
 export KMP_AFFINITY=compact,granularity=fine
-export OMP_NUM_THREADS=66
+export OMP_NUM_THREADS=$(lscpu | grep 'Core(s) per socket' | awk '{print $NF}')
 
-make clean &> /dev/null;
-make &> /dev/null;
-echo "------------------------"
-echo " MKL Convolution - "
-echo "--------------"
-echo " "
-numactl -m 1 ./std_conv_bench
+make clean all CONVLIB=MKLDNN &> /dev/null
 
+if lscpu | grep Flags | grep -qs avx512dq; then
+    ./run_mkl_conv_ia_SKX.sh
+elif lscpu | grep Flags | grep -qa avx512f; then
+    ./run_mkl_conv_ia_KNL.sh
+else
+    ./run_mkl_conv_ia_generic.sh
+fi

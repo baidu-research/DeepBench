@@ -17,19 +17,41 @@
 #include <stdio.h>
 #include <float.h>
 #include <time.h>
+#include <assert.h>
 
 #include <stdexcept>
+#include <tuple>
 #include <vector>
 #include <string>
 
-#ifndef INPUT_H
-#error INPUT_H is not defined
-#endif
-#include INPUT_H
+struct conv_problem {
+    int minibatch;
+    int w;
+    int h;
+    int ic;
+    int oc;
+    int fw;
+    int fh;
+    int stride_w, stride_h;
+    int pad_w, pad_h;
+    int iters;
+};
+
+#include "conv_problems.h"
 
 #define FWD_CONVOLUTION   0
 #define BWD_F_CONVOLUTION 1
 #define BWD_D_CONVOLUTION 2
+
+#define PREC_F32 0
+#define PREC_U8S8U8 1
+#define PREC_S16S16S32 2
+
+#define TRAINING 0
+#define INFERENCE_SERVER 1
+#define INFERENCE_DEVICE 2
+
+#define ITERS 1000
 
 // Calculates convolution output dimension using the definition from Caffe
 static inline int calc_out_dim(
@@ -43,25 +65,24 @@ static double calc_flops(bool skip_padding, const conv_problem& prob)
 {
     double flops;
     // Recalculate output dims here to reduce the number of params
-    int OW = calc_out_dim(prob.w, prob.fw, prob.padd, prob.stride);
-    int OH = calc_out_dim(prob.h, prob.fh, prob.padd, prob.stride);
+    int OW = calc_out_dim(prob.w, prob.fw, prob.pad_w, prob.stride_w);
+    int OH = calc_out_dim(prob.h, prob.fh, prob.pad_h, prob.stride_h);
     if (skip_padding) {
         flops = 0;
         for (int oh = 0; oh < OH; ++oh)
         for (int fh = 0; fh < prob.fh; ++fh) {
-            int ih = oh * prob.stride + fh - prob.padd;
+            int ih = oh * prob.stride_h + fh - prob.pad_h;
             if (!(ih >= 0 && ih < prob.h))
                 continue;
             for (int ow = 0; ow < OW; ++ow)
             for (int fw = 0; fw < prob.fw; ++fw) {
-                int iw = ow * prob.stride + fw - prob.padd;
+                int iw = ow * prob.stride_w + fw - prob.pad_w;
                 flops += (iw >= 0 && iw < prob.w);
             }
         }
     } else
         flops = 1.0 * prob.fw * prob.fh * OW * OH;
-    int groups = std::max(1, prob.groups);
-    return 2.0 * flops * prob.ic * prob.oc * prob.minibatch / groups;
+    return 2.0 * flops * prob.ic * prob.oc * prob.minibatch;
 }
 
 struct bench_result {
@@ -100,15 +121,16 @@ static inline bench_result timeit(int niters, double flops, Func func)
     return result;
 }
 
-static inline void rand_fill(float *data, size_t len)
+template <typename T>
+static inline void rand_fill(T *data, size_t size)
 {
     static bool initialized = false;
     if (!initialized) {
         srand48(1);
         initialized = true;
     }
-    for (size_t i = 0; i < len; i++)
-        data[i] = drand48();
+    for (size_t i = 0; i < size / sizeof(T); i++)
+        data[i] = static_cast<T>(drand48());
 }
 
 #ifdef USE_MKL
@@ -126,19 +148,22 @@ static inline void rand_fill(float *data, size_t len)
     } \
 } while (0)
 
-static bench_result bench_conv(conv_problem prob, int mode, bool skip_padding)
+static bench_result bench_conv(conv_problem prob,
+        int mode, int precision, bool skip_padding)
 {
-    size_t groups = std::max(1, prob.groups);
+    assert(precicion == PREC_F32);
+
+    size_t groups = 1;
     size_t inputSize[] = {prob.w, prob.h, prob.ic, prob.minibatch};
     size_t filterSize[] = {prob.fw, prob.fh,
         prob.ic / groups, prob.oc / groups, groups};
     size_t outputSize[] = {
-        calc_out_dim(prob.w, prob.fw, prob.padd, prob.stride),
-        calc_out_dim(prob.h, prob.fh, prob.padd, prob.stride),
+        calc_out_dim(prob.w, prob.fw, prob.pad_w, prob.stride_w),
+        calc_out_dim(prob.h, prob.fh, prob.pad_h, prob.stride_h),
         prob.oc, prob.minibatch};
     size_t biasSize[] = {prob.oc};
-    size_t convolutionStride[] = {prob.stride, prob.stride};
-    int inputOffset[] = {-prob.padd, -prob.padd};
+    size_t convolutionStride[] = {prob.stride_w, prob.stride_h};
+    int inputOffset[] = {-prob.pad_w, -prob.pad_h};
 
     dnnPrimitive_t conv = NULL;
     void* resources[dnnResourceNumber] = {0};
@@ -174,8 +199,8 @@ static bench_result bench_conv(conv_problem prob, int mode, bool skip_padding)
         dnnLayout_t layout;
         CHECK(dnnLayoutCreateFromPrimitive_F32(&layout, conv, type));
         CHECK(dnnAllocateBuffer_F32(&resources[type], layout));
-        size_t len = dnnLayoutGetMemorySize_F32(layout) / sizeof(float);
-        rand_fill(static_cast<float *>(resources[type]), len);
+        size_t size = dnnLayoutGetMemorySize_F32(layout);
+        rand_fill(static_cast<float *>(resources[type]), size);
         CHECK(dnnLayoutDelete_F32(layout));
     }
 
@@ -199,26 +224,43 @@ static bench_result bench_conv(conv_problem prob, int mode, bool skip_padding)
 
 using namespace mkldnn;
 
-static bench_result bench_conv(conv_problem prob, int mode, bool skip_padding)
+static bench_result bench_conv(conv_problem prob,
+        int mode, int precision, bool skip_padding)
 {
     engine eng(engine::kind::cpu, 0);
 
-    int groups = std::max(1, prob.groups);
+    int groups = 1;
 
-    memory::desc src_d({prob.minibatch, prob.ic, prob.w, prob.h},
-            memory::data_type::f32, memory::format::any);
+    memory::data_type src_dt, dst_dt, filter_dt, bias_dt;
+    switch (precision) {
+    case PREC_U8S8U8:
+        src_dt = memory::data_type::u8;
+        dst_dt = memory::data_type::u8;
+        filter_dt = memory::data_type::s8;
+        bias_dt = memory::data_type::s32;
+        break;
+    case PREC_S16S16S32:
+        src_dt = filter_dt = memory::data_type::s16;
+        dst_dt = bias_dt = memory::data_type::s32;
+        break;
+    default:
+        src_dt = dst_dt = filter_dt = bias_dt = memory::data_type::f32;
+    }
+
+    memory::desc src_d({prob.minibatch, prob.ic, prob.h, prob.w},
+            src_dt, memory::format::any);
     memory::desc dst_d({prob.minibatch, prob.oc,
-            calc_out_dim(prob.w, prob.fw, prob.padd, prob.stride),
-            calc_out_dim(prob.h, prob.fh, prob.padd, prob.stride)},
-            memory::data_type::f32, memory::format::any);
+            calc_out_dim(prob.h, prob.fh, prob.pad_h, prob.stride_h),
+            calc_out_dim(prob.w, prob.fw, prob.pad_w, prob.stride_w)},
+            dst_dt, memory::format::any);
     std::vector<int> fsizes
-        = {prob.oc / groups, prob.ic / groups, prob.fw, prob.fh};
+        = {prob.oc / groups, prob.ic / groups, prob.fh, prob.fw};
     if (groups != 1) fsizes.insert(fsizes.begin(), groups);
-    memory::desc filter_d(fsizes, memory::data_type::f32, memory::format::any);
+    memory::desc filter_d(fsizes, filter_dt, memory::format::any);
     memory::desc bias_d({prob.oc},
-            memory::data_type::f32, memory::format::any);
-    memory::dims strides = {prob.stride, prob.stride};
-    memory::dims padding = {prob.padd, prob.padd};
+            bias_dt, memory::format::any);
+    memory::dims strides = {prob.stride_h, prob.stride_w};
+    memory::dims padding = {prob.pad_h, prob.pad_w};
 
     std::shared_ptr<primitive> conv;
     std::shared_ptr<memory> src;
@@ -274,9 +316,28 @@ static bench_result bench_conv(conv_problem prob, int mode, bool skip_padding)
     for (const auto &m : {src, dst, filter, bias}) {
         if (!m.get() || !m->get())
             continue;
-        float *data = static_cast<float *>(m->get_data_handle());
-        size_t len = m->get_primitive_desc().get_size() / sizeof(float);
-        rand_fill(data, len);
+        void *data = m->get_data_handle();
+        auto pd = m->get_primitive_desc();
+        size_t size = pd.get_size();
+        switch (pd.desc().data.data_type) {
+        case memory::data_type::f32:
+            rand_fill(static_cast<float *>(data), size);
+            break;
+        case memory::data_type::u8:
+            rand_fill(static_cast<uint8_t *>(data), size);
+            break;
+        case memory::data_type::s8:
+            rand_fill(static_cast<int8_t *>(data), size);
+            break;
+        case memory::data_type::s16:
+            rand_fill(static_cast<int16_t *>(data), size);
+            break;
+        case memory::data_type::s32:
+            rand_fill(static_cast<int32_t *>(data), size);
+            break;
+        default:
+            assert(!"Unsupported data type!\n");
+        }
     }
 
     stream str(stream::kind::eager);
@@ -289,50 +350,102 @@ static bench_result bench_conv(conv_problem prob, int mode, bool skip_padding)
 
 static void usage()
 {
-    printf("Usage: <executable> "
-            "[<flops w/ padding> = 1 | <flops w/o padding> = 0]\n");
+    printf(
+            "Usage: <executable> [OPTIONS]\n"
+            "\n"
+            "Output control:\n"
+            "   --csv-output        Produce CSV output\n"
+            "   --original-output   Produce output in the original format\n"
+            "\n"
+            "Control flops calculations:\n"
+            "   --no-skip-padding   Count ops with padding zeroes (default)\n"
+            "   --skip-padding      Do not count ops with padding zeroes\n"
+            "\n"
+            "Precision control:\n"
+            "   --f32               32-bit floating point (default)\n"
+            "   --u8s8u8            8-bit integers (AVX512VL CPUs)\n"
+            "   --s16s16s32         16-bit integers with 32-bit output\n"
+            "                       (AVX512_4VNNI CPUs)\n"
+            "Problem set control:\n"
+            "   --training          Training data set (default)\n"
+            "   --inference-server  Server inference data set\n"
+            "   --inference-device  Device inference data set\n"
+            "\n"
+          );
     exit(-1);
 }
 
 int main(int argc, char **argv)
 {
-    if (argc > 3)
-        usage();
-
     bool skip_padding = false;
-    if (argc > 1) {
-        if (argv[1] == std::string("0"))
+    bool csv_output = false;
+    int precision = PREC_F32;
+    std::vector<int> modes
+        = {FWD_CONVOLUTION, BWD_F_CONVOLUTION, BWD_D_CONVOLUTION};
+    int problem_set = TRAINING;
+
+    for(argc--, argv++; argc; argv++, argc--) {
+        if (*argv == std::string("--csv-output"))
+            csv_output = true;
+        else if (*argv == std::string("--original-output"))
+            csv_output = false;
+        else if (*argv == std::string("--skip-padding"))
             skip_padding = true;
-        else if (argv[1] == std::string("1"))
+        else if (*argv == std::string("--no-skip-padding"))
             skip_padding = false;
+        else if (*argv == std::string("--f32"))
+            precision = PREC_F32;
+        else if (*argv == std::string("--u8s8u8"))
+            precision = PREC_U8S8U8;
+        else if (*argv == std::string("--s16s16s32"))
+            precision = PREC_S16S16S32;
+        else if (*argv == std::string("--inference-device"))
+            problem_set = INFERENCE_DEVICE;
+        else if (*argv == std::string("--inference-server"))
+            problem_set = INFERENCE_SERVER;
+        else if (*argv == std::string("--training"))
+            problem_set = TRAINING;
         else
             usage();
     }
 
-    bool csv_output = false;
-    if (argc > 2) {
-        if (argv[2] == std::string("--csv-output"))
-            csv_output = true;
-        else if (argv[2] == std::string("--original-output"))
-            csv_output = false;
-        else
-            usage();
+#ifdef USE_MKL
+    if (precision != PREC_F32) {
+        printf("MKL version of DeepBench only support F32 precision. "
+                "Please use MKL-DNN version instead.\n");
+        usage();
     }
+#endif
+
+#ifdef USE_MKLDNN
+    if (precision != PREC_F32 || problem_set != TRAINING)
+        modes = {FWD_CONVOLUTION};
+#endif
 
     const char *conv_mode_strs[] = {"FWD", "BWD_F", "BWD_D"};
     const char *skip_padding_strs[]
         = {"w/ padding in flops", "w/o padding in flops"};
 
-    for (auto m : {FWD_CONVOLUTION, BWD_F_CONVOLUTION, BWD_D_CONVOLUTION}) {
+    const auto &problems = (problem_set == TRAINING
+            ? training_set
+            : (problem_set == INFERENCE_DEVICE
+                ? inference_device_set
+                : inference_server_set));
+
+    for (auto m : modes) {
         if (!csv_output)
             printf(" %s Convolution\n", conv_mode_strs[m]);
-        for (const auto& p : conv_problems) {
-            auto r = bench_conv(p, m, skip_padding);
+        for (const auto& problem : problems) {
+            conv_problem p;
+            std::tie(p.w, p.h, p.ic, p.minibatch, p.oc, p.fh, p.fw,
+                    p.pad_w, p.pad_h, p.stride_w, p.stride_h) = problem;
+            p.iters = ITERS;
+            auto r = bench_conv(p, m, precision, skip_padding);
             if (csv_output)
-                printf("%s,%d,\"%s\",%d,%d,%d,%d,%d,%d,%d,%d,%d,%d,%d,%e,%e,%e,%e\n",
-                        conv_mode_strs[m], skip_padding, p.name,
+                printf("%s,%d,%d,%d,%d,%d,%d,%d,%d,%d,%d,%d,%d,%e,%e,%e,%e\n",
+                        conv_mode_strs[m], skip_padding,
                         p.minibatch, p.w, p.h, p.ic, p.oc, p.fw, p.fh,
-                        p.stride, p.stride, p.padd, p.padd,
+                        p.stride_w, p.stride_h, p.pad_w, p.pad_h,
                         r.min_ms, r.max_gflops, r.avg_ms, r.avg_gflops);
             else
                 printf("W=%d, H=%d, C=%d, N=%d, K=%d, R=%d, S=%d | "

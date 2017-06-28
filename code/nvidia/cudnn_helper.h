@@ -53,8 +53,14 @@ public:
         cudnnDataType_t type;
         if (std::is_same<T, float>::value)
             type = CUDNN_DATA_FLOAT;
+        else if (std::is_same<T, uint16_t>::value)
+            type = CUDNN_DATA_HALF;
+#if CUDNN_MAJOR >= 6
+        else if (std::is_same<T, uint8_t>::value)
+            type = CUDNN_DATA_INT8;
+#endif
         else
-            throw std::runtime_error("Unknown type");
+            throw std::runtime_error("Unknown type in TensorDescriptorNd");
 
         cudnnTensorDescriptor_t * desc = new cudnnTensorDescriptor_t;
 
@@ -94,8 +100,14 @@ class TensorDescriptorNdArray {
         cudnnDataType_t type;
         if (std::is_same<T, float>::value)
             type = CUDNN_DATA_FLOAT;
+        else if (std::is_same<T, uint16_t>::value)
+            type = CUDNN_DATA_HALF;
+#if CUDNN_MAJOR >= 6
+        else if (std::is_same<T, uint8_t>::value)
+            type = CUDNN_DATA_INT8;
+#endif
         else
-            throw std::runtime_error("Unknown type");
+            throw std::runtime_error("Unknown type in TensorDescriptorNdArray ");
 
         cudnnTensorDescriptor_t * desc_array = new cudnnTensorDescriptor_t[num];
 
@@ -131,8 +143,14 @@ public:
         cudnnDataType_t type;
         if (std::is_same<T, float>::value)
             type = CUDNN_DATA_FLOAT;
+        else if (std::is_same<T, uint16_t>::value)
+            type = CUDNN_DATA_HALF;
+#if CUDNN_MAJOR >= 6
+        else if (std::is_same<T, uint8_t>::value)
+            type = CUDNN_DATA_INT8;
+#endif
         else
-            throw std::runtime_error("Unknown type");
+            throw std::runtime_error("Unknown type in FilterDescriptorNd");
 
         cudnnFilterDescriptor_t * desc = new cudnnFilterDescriptor_t;
         CHECK_CUDNN_ERROR(cudnnCreateFilterDescriptor(desc));
@@ -161,10 +179,17 @@ public:
     TensorDescriptor4d(const cudnnTensorFormat_t tensor_format,
                        const int n, const int c, const int h, const int w) {
         cudnnDataType_t type;
-        if (std::is_same<T, float>::value)
+        if (std::is_same<T, float>::value) {
             type = CUDNN_DATA_FLOAT;
-        else
-            throw std::runtime_error("Unknown type");
+#if CUDNN_MAJOR >= 6
+        } else if (std::is_same<T, uint8_t>::value) {
+            type = CUDNN_DATA_INT8;
+#endif
+        } else if (std::is_same<T, uint16_t>::value) {
+            type = CUDNN_DATA_HALF;
+        } else {
+            throw std::runtime_error("Unknown type in TensorDescriptor4d");
+        }
 
         cudnnTensorDescriptor_t * desc = new cudnnTensorDescriptor_t;
         CHECK_CUDNN_ERROR(cudnnCreateTensorDescriptor(desc));
@@ -195,13 +220,22 @@ class FilterDescriptor4d {
     };
 
 public:
+    FilterDescriptor4d() {}
+
     FilterDescriptor4d(const cudnnTensorFormat_t tensor_format,
                        int k, int c, int h, int w) {
         cudnnDataType_t type;
-        if (std::is_same<T, float>::value)
+        if (std::is_same<T, float>::value) {
             type = CUDNN_DATA_FLOAT;
-        else
-            throw std::runtime_error("Unknown type");
+#if CUDNN_MAJOR >= 6
+        } else if (std::is_same<T, uint8_t>::value) {
+            type = CUDNN_DATA_INT8;
+#endif
+        } else if (std::is_same<T, uint16_t>::value) {
+            type = CUDNN_DATA_HALF;
+        } else {
+            throw std::runtime_error("Unknown type in FilterDescriptor4d");
+        }
 
         cudnnFilterDescriptor_t * desc = new cudnnFilterDescriptor_t;
         CHECK_CUDNN_ERROR(cudnnCreateFilterDescriptor(desc));
@@ -214,6 +248,7 @@ public:
 
 };
 
+template <typename T>
 class ConvolutionDescriptor {
     std::shared_ptr<cudnnConvolutionDescriptor_t> desc_;
 
@@ -229,8 +264,22 @@ public:
     ConvolutionDescriptor(int pad_h, int pad_w, int hstride, int wstride) :
         desc_(new cudnnConvolutionDescriptor_t, ConvolutionDescriptorDeleter()) {
 
-        CHECK_CUDNN_ERROR(cudnnCreateConvolutionDescriptor(desc_.get())); 
-#if CUDNN_MAJOR >= 6       
+        CHECK_CUDNN_ERROR(cudnnCreateConvolutionDescriptor(desc_.get()));
+#if CUDNN_MAJOR >= 6
+        cudnnDataType_t type;
+        if (std::is_same<T, float>::value) {
+            type = CUDNN_DATA_FLOAT;
+        } else if (std::is_same<T, uint8_t>::value) {
+            type = CUDNN_DATA_INT8;
+        } else if (std::is_same<T, uint16_t>::value) {
+            type = CUDNN_DATA_HALF;
+        } else if (std::is_same<T, int>::value) {
+            type = CUDNN_DATA_INT32;
+        } else {
+            throw std::runtime_error("Unknown type in ConvolutionDescriptor");
+        }
+
+
         CHECK_CUDNN_ERROR(cudnnSetConvolution2dDescriptor(*desc_,
                                                           pad_h,
                                                           pad_w,
@@ -239,8 +288,8 @@ public:
                                                           1,
                                                           1,
                                                           CUDNN_CONVOLUTION,
-                                                          CUDNN_DATA_FLOAT));
-#else   
+                                                          type));
+#else
         CHECK_CUDNN_ERROR(cudnnSetConvolution2dDescriptor(*desc_,
                                                           pad_h,
                                                           pad_w,
@@ -249,9 +298,9 @@ public:
                                                           1,
                                                           1,
                                                           CUDNN_CONVOLUTION));
-        
+
 #endif
-        
+
     }
 
     cudnnConvolutionDescriptor_t desc() const { return *desc_; };
@@ -278,8 +327,14 @@ public:
         cudnnDataType_t type;
         if (std::is_same<T, float>::value)
             type = CUDNN_DATA_FLOAT;
+        else if (std::is_same<T, uint16_t>::value)
+            type = CUDNN_DATA_HALF;
+#if CUDNN_MAJOR >= 6
+        else if (std::is_same<T, uint8_t>::value)
+            type = CUDNN_DATA_INT8;
+#endif
         else
-            throw std::runtime_error("Unknown type");
+            throw std::runtime_error("Unknown type in RNNDescriptor");
 
         cudnnRNNMode_t rnn_mode;
         if (rnn_type == "vanilla")

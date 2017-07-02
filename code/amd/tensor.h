@@ -12,7 +12,7 @@ class Tensor {
     std::vector<int> dims_;
     int size_;
 
-    struct deleteCudaPtr {
+    struct deleteDevPtr {
         void operator()(T *p) const {
             hipFree(p);
         }
@@ -29,7 +29,7 @@ public:
         size_ = std::accumulate(dims_.begin(), dims_.end(), 1, std::multiplies<int>());
         hipMalloc(&tmp_ptr, sizeof(T) * size_);
 
-        ptr_.reset(tmp_ptr, deleteCudaPtr());
+        ptr_.reset(tmp_ptr, deleteDevPtr());
     }
 
     T* begin() const { return ptr_.get(); }

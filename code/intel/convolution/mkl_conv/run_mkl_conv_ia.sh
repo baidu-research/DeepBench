@@ -28,7 +28,8 @@ export KMP_HW_SUBSET=1T
 export KMP_AFFINITY=compact,granularity=fine
 export OMP_NUM_THREADS=$(lscpu | grep 'Core(s) per socket' | awk '{print $NF}')
 
-make clean all CONVLIB=MKLDNN &> /dev/null
+make clean all CONVLIB=MKLDNN || \
+    { echo "*** ERROR: make failed"; exit 1; }
 
 if lscpu | grep Flags | grep -qs avx512dq; then
     ./run_mkl_conv_ia_SKX.sh

@@ -106,7 +106,7 @@ static inline bench_result timeit(int niters, double flops, Func func)
     func(); // Warmup
     bench_result result = {DBL_MAX, 0, 0, 0};
     int iters_done = 0;
-    for (; iters_done < niters; iters_done++) {
+    for (; iters_done < niters && result.avg_ms < max_ms_total; iters_done++) {
         double ms = ms_timer();
         func();
         ms = ms_timer() - ms;
@@ -115,7 +115,7 @@ static inline bench_result timeit(int niters, double flops, Func func)
         if (result.avg_ms > max_ms_total)
             break;
     }
-    result.avg_ms /= iters_done + 1;
+    result.avg_ms /= iters_done;
     result.avg_gflops = flops / result.avg_ms * 1E-6;
     result.max_gflops = flops / result.min_ms * 1E-6;
     return result;

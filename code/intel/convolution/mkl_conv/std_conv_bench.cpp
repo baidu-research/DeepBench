@@ -151,7 +151,7 @@ static inline void rand_fill(T *data, size_t size)
 static bench_result bench_conv(conv_problem prob,
         int mode, int precision, bool skip_padding)
 {
-    assert(precicion == PREC_F32);
+    assert(precision == PREC_F32);
 
     size_t groups = 1;
     size_t inputSize[] = {prob.w, prob.h, prob.ic, prob.minibatch};

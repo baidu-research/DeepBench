@@ -62,7 +62,7 @@ int main(int argc, char *argv[]) {
     }
 
     for (auto &t_size: sizes) {
-        auto data = fill({t_size*size}, rank);
+        auto data = fill<float>({t_size*size}, rank);
 
         cudaStreamSynchronize(stream);
         auto start = std::chrono::steady_clock::now();

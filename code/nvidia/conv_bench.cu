@@ -267,8 +267,10 @@ public:
             return "FFT_TILING";
         else if (fwd_algo_ == CUDNN_CONVOLUTION_FWD_ALGO_WINOGRAD)
             return "WINOGRAD";
+#if CUDNN_MAJOR >= 6
         else if (fwd_algo_ == CUDNN_CONVOLUTION_FWD_ALGO_WINOGRAD_NONFUSED)
             return "WINOGRAD_NONFUSED";
+#endif
         else {
             std::stringstream ss;
             ss << "Illegal algorithm passed to get_fwd_algo_string. Algo: " << fwd_algo_ << std::endl;

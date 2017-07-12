@@ -350,7 +350,11 @@ public:
         cudnnRNNDescriptor_t * desc = new cudnnRNNDescriptor_t;
 
         CHECK_CUDNN_ERROR(cudnnCreateRNNDescriptor(desc));
+#if CUDNN_MAJOR >= 7
+        CHECK_CUDNN_ERROR(cudnnSetRNNDescriptor_v5(*desc,
+#else
         CHECK_CUDNN_ERROR(cudnnSetRNNDescriptor(*desc,
+#endif
                                                 hidden_size,
                                                 num_layers,
                                                 dropout_desc,

@@ -135,7 +135,6 @@ public:
                                                               CUDNN_CONVOLUTION_FWD_PREFER_FASTEST,
                                                               0,
                                                               &fwd_algo_));
-            fwd_algo_ = fwd_perf.algo;
         }
 #else
        // Pick forward convolution algorithm

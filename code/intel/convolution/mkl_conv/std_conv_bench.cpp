@@ -112,8 +112,6 @@ static inline bench_result timeit(int niters, double flops, Func func)
         ms = ms_timer() - ms;
         result.avg_ms += ms;
         result.min_ms = std::min(result.min_ms, ms);
-        if (result.avg_ms > max_ms_total)
-            break;
     }
     result.avg_ms /= iters_done;
     result.avg_gflops = flops / result.avg_ms * 1E-6;

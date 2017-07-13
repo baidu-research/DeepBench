@@ -349,7 +349,7 @@ std::tuple<int, int, int, std::string> time_cnn(
     cudnnCNN<T1, T2> cnn(w, h, c, n, k, r, s, pad_w, pad_h, wstride, hstride, inference);
 
     // Allocate memory for filter
-    auto filter = rand<T1>(std::vector<int>{r, s, c, k}, curand_gen);
+    auto filter = rand<T1>(std::vector<int>{s, r, c, k}, curand_gen);
 
     // Allocate memory for input
     auto input = rand<T1>(std::vector<int>{w, h, c, n}, curand_gen);
@@ -380,7 +380,7 @@ std::tuple<int, int, int, std::string> time_cnn(
     if (!inference) {
         // Allocate memory for backward pass wrt weights
         auto delta = rand<T1>(cnn.get_output_dims(), curand_gen);
-        auto dW = zeros<T1>(std::vector<int>{r, s, c, k});
+        auto dW = zeros<T1>(std::vector<int>{s, r, c, k});
 
         // Warm up backward
         cnn.backward_params(input, delta, dW);
@@ -468,7 +468,7 @@ int main(int argc, char **argv) {
     std::cout << std::setw(30) << "Times" << std::endl;
     std::cout << std::setfill('-') << std::setw(190) << "-" << std::endl;
     std::cout << std::setfill(' ');
-    std::cout << "   w      h      c      n      k      r      s    pad_w  pad_h    stride_w  stride_h    precision  fwd_time (usec)  ";
+    std::cout << "   w      h      c      n      k      f_w    f_h  pad_w  pad_h    stride_w  stride_h    precision  fwd_time (usec)  ";
 
     if (!inference) {
         std::cout << "bwd_inputs_time (usec)  bwd_params_time (usec)  ";
@@ -488,7 +488,7 @@ int main(int argc, char **argv) {
     for (const auto &problem : (inference ? inference_server_set : training_set)) {
 
         // Filter parameters
-        int k, c, r, s;
+        int k, c, r, s; // r - filter_h (f_h), s - filter_w (f_w)
 
         // Input parameters
         int n, w, h;
@@ -499,7 +499,7 @@ int main(int argc, char **argv) {
         // Stride
         int wstride, hstride;
 
-        std::tie(w, h, c, n, k, r, s, pad_w, pad_h, wstride, hstride) = problem;
+        std::tie(w, h, c, n, k, s, r, pad_w, pad_h, wstride, hstride) = problem;
 
         bool skip_kernel = false;
         bool need_padding = false;
@@ -559,8 +559,8 @@ int main(int argc, char **argv) {
         std::cout << std::setw(7) << c;
         std::cout << std::setw(7) << n;
         std::cout << std::setw(7) << k;
-        std::cout << std::setw(7) << r;
         std::cout << std::setw(7) << s;
+        std::cout << std::setw(7) << r;
         std::cout << std::setw(7) << pad_w;
         std::cout << std::setw(8) << pad_h;
         std::cout << std::setw(10) << wstride;

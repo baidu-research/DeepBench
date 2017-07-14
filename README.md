@@ -458,11 +458,11 @@ Results on more hardware platforms will be added once they are available. We wel
 
 | Input Size                        | Filter Size     | # of Filters   | Padding (h, w)   | Stride (h, w)   | Application          | Total Time (ms)   | Fwd TeraFLOPS   | Processor       |
 | --------------------------------- | --------------- | -------------- | ---------------- | --------------- | -------------------- | ----------------- | --------------- | --------------- |
-| W = 700, H = 161, C = 1, N = 32   | R = 5, S = 20   | 32             | 0, 0             | 2, 2            | Speech Recognition   | 2.64              | 6.69            | TitanXp         |
-| W = 54, H = 54, C = 64, N = 8     | R = 3, S = 3    | 64             | 1, 1             | 1, 1            | Face Recognition     | 0.64              | 10.62           | TitanXp         |
+| W = 700, H = 161, C = 1, N = 32   | R = 5, S = 20   | 32             | 0, 0             | 2, 2            | Speech Recognition   | 2.64              | 6.74            | TitanXp         |
+| W = 54, H = 54, C = 64, N = 8     | R = 3, S = 3    | 64             | 1, 1             | 1, 1            | Face Recognition     | 0.64              | 10.68           | TitanXp         |
 | W = 224, H = 224, C = 3, N = 16   | R = 3, S = 3    | 64             | 1, 1             | 1, 1            | Computer Vision      | 2.40              | 4.26            | Tesla P100      |
 | W = 7, H = 7,  C = 512, N = 16    | R = 3, S = 3    | 512            | 1, 1             | 1, 1            | Computer Vision      | 1.37              | 7.68            | GTX 1080 Ti     |
-| W = 28, H = 28, C = 192, N = 16   | R = 5, S = 5    | 32             | 2, 2             | 1, 1            | Computer Vision      | 1.57              | 6.59            | TitanX Pascal   |
+| W = 28, H = 28, C = 192, N = 16   | R = 5, S = 5    | 32             | 2, 2             | 1, 1            | Computer Vision      | 1.57              | 6.45            | TitanX Pascal   |
 
 ### Recurrent Ops Results
 
@@ -521,7 +521,7 @@ server platforms. Results on Intel platforms should be available shortly.
 
 | Input Size                     | Filter Size   | # of Filters | Padding (h, w) | Stride (h, w) | Application        | Time (ms) | TeraFLOPS | Processor     |
 |--------------------------------|---------------|--------------|----------------|---------------|--------------------|-----------|-----------|---------------|
-| W = 341, H = 79, C = 32, N = 4 | R = 5, S = 10 | 32           | 0,0            | 2,2           | Speech Recognition | 0.29      | 8.45      | TitanXp       |
+| W = 341, H = 79, C = 32, N = 4 | R = 5, S = 10 | 32           | 0,0            | 2,2           | Speech Recognition | 0.29      | 9.03      | TitanXp       |
 | W = 224, H = 224, C = 3, N = 1 | R = 7, S = 7  | 64           | 3, 3           | 2, 2          | Computer Vision    | 0.14      | 1.64      | TitanXp       |
 | W = 56, H = 56, C = 256, N = 1 | R = 1, S = 1  | 128          | 0, 0           | 2, 2          | Computer Vision    | 0.015     | 3.43      | TitanX Pascal |
 | W = 7, H = 7,  C = 512, N = 2  | R = 1, S = 1  | 2048         | 0, 0           | 1, 1          | Computer Vision    | 0.018     | 11.42     | 1080 Ti       |

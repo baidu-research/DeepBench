@@ -215,7 +215,7 @@ std::vector<std::tuple<unsigned int, unsigned int, unsigned int, unsigned int,
 std::vector<std::tuple<unsigned int, unsigned int, unsigned int, unsigned int,
                        unsigned int, unsigned int, unsigned int,
                        unsigned int, unsigned int, unsigned int, unsigned int>> inference_device_set = {
-    // std::make_tuple(151, 40, 1, 1, 32, 20, 5, 8, 8, 8, 2), ARM convolution kernels hang with this kernel
+    //std::make_tuple(151, 40, 1, 1, 32, 20, 5, 8, 8, 8, 2),  ARM convolution seg faults with this kernel
     std::make_tuple(112, 112, 64, 1, 64, 1, 1, 0, 0, 1, 1),
     std::make_tuple(56, 56, 64, 1, 256, 1, 1, 0, 0, 1, 1),
     std::make_tuple(56, 56, 256, 1, 64, 1, 1, 0, 0, 1, 1),

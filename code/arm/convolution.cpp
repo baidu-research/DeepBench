@@ -13,7 +13,7 @@
 using namespace arm_compute;
 
 int time_cnn(unsigned int w, unsigned int h, unsigned int n, unsigned int c, 
-             unsigned int k, unsigned int r, int s,
+             unsigned int k, unsigned int filter_w, int filter_h,
              unsigned int pad_w, unsigned int pad_h, 
              unsigned int wstride, unsigned int hstride,
              int num_repeats) 
@@ -24,8 +24,8 @@ int time_cnn(unsigned int w, unsigned int h, unsigned int n, unsigned int c,
     Tensor biases0;
     Tensor out_conv0;
 
-    unsigned int out_w = (w - r + 2*pad_w)/wstride + 1;
-    unsigned int out_h = (h - s + 2*pad_h)/hstride + 1;
+    unsigned int out_w = (w - filter_w + 2*pad_w)/wstride + 1;
+    unsigned int out_h = (h - filter_h + 2*pad_h)/hstride + 1;
 
     //Functionfor performing ConvolutionLayer
     NEConvolutionLayer conv0;
@@ -35,7 +35,7 @@ int time_cnn(unsigned int w, unsigned int h, unsigned int n, unsigned int c,
     src.allocator()->init(TensorInfo(src_shape, 1, DataType::F32));
 
     // Initialize weights, bias and output tensors
-    const TensorShape weights_shape_conv0(static_cast<long unsigned int>(r), static_cast<long unsigned int>(s), static_cast<unsigned int>(src_shape.z()), k);
+    const TensorShape weights_shape_conv0(static_cast<long unsigned int>(filter_w), static_cast<long unsigned int>(filter_h), static_cast<unsigned int>(src_shape.z()), k);
     const TensorShape biases_shape_conv0(weights_shape_conv0[3]);
     const TensorShape out_shape_conv0(out_w, out_h, weights_shape_conv0[3]);
 
@@ -80,7 +80,7 @@ int main(int argc, const char **argv)
     std::cout << std::setw(30) << "Times" << std::endl;
     std::cout << std::setfill('-') << std::setw(115) << "-" << std::endl;
     std::cout << std::setfill(' ');
-    std::cout << "   w      h      c      n      k      r      s    pad_w  pad_h    stride_w  stride_h    precision  fwd_time (usec)  " << std::endl;
+    std::cout << "   w      h      c      n      k      f_w    f_h  pad_w  pad_h    stride_w  stride_h    precision  fwd_time (usec)  " << std::endl;
 
     std::cout << std::setfill('-') << std::setw(115) << "-" << std::endl;
     std::cout << std::setfill(' ');
@@ -88,7 +88,7 @@ int main(int argc, const char **argv)
     for (const auto &problem : inference_device_set) {
 
         // Filter parameters
-        unsigned int k, c, r, s;
+        unsigned int k, c, filter_w, filter_h;
 
         // Input parameters
         unsigned int n, w, h;
@@ -99,17 +99,17 @@ int main(int argc, const char **argv)
         // Stride
         unsigned int wstride, hstride;
 
-        std::tie(w, h, c, n, k, r, s, pad_w, pad_h, wstride, hstride) = problem;
+        std::tie(w, h, c, n, k, filter_w, filter_h, pad_w, pad_h, wstride, hstride) = problem;
 
-        auto time = time_cnn(w, h, c, n, k, r, s, pad_w, pad_h, wstride, hstride, num_repeats);
+        auto time = time_cnn(w, h, c, n, k, filter_w, filter_h, pad_w, pad_h, wstride, hstride, num_repeats);
 
         std::cout << std::setw(5) << w;
         std::cout << std::setw(7) << h;
         std::cout << std::setw(7) << c;
         std::cout << std::setw(7) << n;
         std::cout << std::setw(7) << k;
-        std::cout << std::setw(7) << r;
-        std::cout << std::setw(7) << s;
+        std::cout << std::setw(7) << filter_w;
+        std::cout << std::setw(7) << filter_h;
         std::cout << std::setw(7) << pad_w;
         std::cout << std::setw(8) << pad_h;
         std::cout << std::setw(10) << wstride;

@@ -437,7 +437,7 @@ int main(int argc, char **argv)
             printf(" %s Convolution\n", conv_mode_strs[m]);
         for (const auto& problem : problems) {
             conv_problem p;
-            std::tie(p.w, p.h, p.ic, p.minibatch, p.oc, p.fh, p.fw,
+            std::tie(p.w, p.h, p.ic, p.minibatch, p.oc, p.fw, p.fh,
                     p.pad_w, p.pad_h, p.stride_w, p.stride_h) = problem;
             p.iters = ITERS;
             auto r = bench_conv(p, m, precision, skip_padding);
@@ -448,7 +448,7 @@ int main(int argc, char **argv)
                         p.stride_w, p.stride_h, p.pad_w, p.pad_h,
                         r.min_ms, r.max_gflops, r.avg_ms, r.avg_gflops);
             else
-                printf("W=%d, H=%d, C=%d, N=%d, K=%d, R=%d, S=%d | "
+                printf("W=%d, H=%d, C=%d, N=%d, K=%d, S=%d, R=%d | "
                         "%s %s min(ms) %.2f; max(gflop/s) %.2f;"
                         "avg(ms) %.2f; avg(gflop/s) %.2f;\n",
                         p.w, p.h, p.ic, p.minibatch, p.oc, p.fw, p.fh,

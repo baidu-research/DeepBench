@@ -599,6 +599,14 @@ You need to build the code for the appropriate architecture. By default, the arc
 ARCH=sm_61 ## Just an example for Pascal architecture
 ```
 
+In some cases, it may be useful to generate benchmarking executables for multiple architectures. For example, some systems may have multiple graphics processors with different architectures installed. The NVIDIA compiler (nvcc) supports the generation of "fat binaries" that contain intermediate and compiled code for multiple target architectures. To compile for multiple architectures, add a comma separated list of architectures to the `make` command line.
+
+```
+ARCH=sm_30,sm_32,sm_35,sm_50,sm_52,sm_60,sm_61,sm_62     # Everything since Kepler!
+```
+Note that compilation for multiple architectures will take longer than compilation for a single architecture. Also, not all CUDA versions support all architectures. For example, support for sm_60 (and later) require CUDA 8 or later.
+
+
 For inference problems with `int8` precision, the convolution and gemm kernels need to be padded to be multiples of 4. By default, the kernels are padded and results are reported with padding. To disable padding, please use the following build option. When padding is disabled, the benchmark numbers aren't reported for the kernels that aren't supported. 
 
 ```

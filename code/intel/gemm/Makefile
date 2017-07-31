@@ -24,19 +24,19 @@ all : sbench sbench_pack
 ibench_s8u8s32 : ibench_s8u8s32.o
 	$(CC) $(CFLAGS) $^  $(EXTRALIB)  -o $@ 
 
-ibench_s8u8s32.o : bench.cpp input.h
+ibench_s8u8s32.o : bench.cpp ../../kernels/gemm_problems.h
 	$(CC) $(CFLAGS) -DIGEMM_S8U8S32 -c -o $@ $<
 
 sbench_pack : sbench_pack.o
 	$(CC) $(CFLAGS) $^  $(EXTRALIB)  -o $@ 
 
-sbench_pack.o : bench.cpp input.h
+sbench_pack.o : bench.cpp ../../kernels/gemm_problems.h
 	$(CC) $(CFLAGS) -DPACKED_API -c -o $@ $<
 
 sbench : sbench.o
 	$(CC) $(CFLAGS) $^  $(EXTRALIB)  -o $@ 
 
-sbench.o : bench.cpp input.h
+sbench.o : bench.cpp ../../kernels/gemm_problems.h
 	$(CC) $(CFLAGS) -c -o $@ $<
 
 clean :

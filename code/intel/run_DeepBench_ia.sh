@@ -31,7 +31,7 @@ export KMP_AFFINITY=compact,granularity=fine
 export OMP_NUM_THREADS=66
 
 echo " "
-cd sgemm
+cd gemm
 pwd
 sh ./run_mkl_sgemm_ia.sh
 

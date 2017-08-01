@@ -17,12 +17,22 @@
 #include <stdlib.h>
 #include <stdio.h>
 #include <omp.h>
-#include "mkl.h"
-#include "input.h"
+#include <assert.h>
 
-#define IS_TRANS(x) (((x) == 'T') || ((x) == 't'))
+#include <chrono>
+#include <iomanip>
+#include <iostream>
+#include <memory>
+#include <stdexcept>
+#include <tuple>
+#include <vector>
+#include <cstdint>
+#include <sstream>
+
+#include <mkl.h>
+#include "gemm_problems.h"
+
 #define FIX_LD(x)   (((((x) + 127)/128)*128) + 16)
-#define MAX(x, y)   ((x) >= (y) ? (x) : (y))
 
 #define REPEAT 10
 #define MKL_MEM_ALIGNMENT (4*1024)
@@ -40,6 +50,21 @@
 #define C_TYPE float
 #endif
 
+typedef struct gemm_params {
+    bool ta;
+    bool tb;
+    char transa;
+    char transb;
+    int m;
+    int n;
+    int k;
+    int lda;
+    int ldb;
+    int ldc;
+} gemm_params_t;
+
+
+
 int main(int argc, char *argv[])
 {
   int i, j;
@@ -55,55 +80,65 @@ int main(int argc, char *argv[])
 #ifdef PACKED_API
   float *AP, *BP;
 #endif
-  gemm_params_t* p_gemm_params;
 
   int run_training_set = 1;
   if (argc > 1) run_training_set = atoi(argv[1]);
 
-
+  std::vector<std::tuple<int, int, int, bool, bool>>* p_problem_set;
   if (run_training_set) {
     printf("Running the training benchmark (set first program argument to 0 for inference)\n");
-    p_gemm_params = &gemm_training_params[0];
-    num_gemms = sizeof(gemm_training_params)/sizeof(gemm_training_params[0]);
+    p_problem_set = &training_set;
   } else {
     printf("Running the inference benchmark (first program argument is 0)\n");
-    p_gemm_params = &gemm_server_inference_params[0];
-    num_gemms = sizeof(gemm_server_inference_params)/sizeof(gemm_server_inference_params[0]);
+    p_problem_set = &inference_server_set;
   }
 
-  for (i=0; i < num_gemms; ++i) {
+  num_gemms = p_problem_set->size();
+  gemm_params_t* p_gemm_params = (gemm_params_t*) _mm_malloc(num_gemms*sizeof(gemm_params_t), 64);
 
-    if (IS_TRANS(p_gemm_params[i].transa)) {
+  i = 0;
+  for (const auto &problem : *p_problem_set) {
+    std::tie(p_gemm_params[i].m, p_gemm_params[i].n, p_gemm_params[i].k, 
+             p_gemm_params[i].ta, p_gemm_params[i].tb) = problem;
+
+    if (p_gemm_params[i].ta) {
       p_gemm_params[i].lda = FIX_LD(p_gemm_params[i].k);
       sizea = p_gemm_params[i].lda * p_gemm_params[i].m;
+      p_gemm_params[i].transa = 'T';
     } else {
       p_gemm_params[i].lda = FIX_LD(p_gemm_params[i].m);
       sizea = p_gemm_params[i].lda * p_gemm_params[i].k;
+      p_gemm_params[i].transa = 'N';
     }
 
-    if (IS_TRANS(p_gemm_params[i].transb)) {
+    if (p_gemm_params[i].tb) {
       p_gemm_params[i].ldb = FIX_LD(p_gemm_params[i].n);
       sizeb = p_gemm_params[i].ldb * p_gemm_params[i].k;
+      p_gemm_params[i].transb = 'T';
     } else {
       p_gemm_params[i].ldb = FIX_LD(p_gemm_params[i].k);
       sizeb = p_gemm_params[i].ldb * p_gemm_params[i].n;
+      p_gemm_params[i].transb = 'N';
     }
 
-    p_gemm_params[i].ldc = FIX_LD(p_gemm_params[i]. m);
+    p_gemm_params[i].ldc = FIX_LD(p_gemm_params[i].m);
     sizec = p_gemm_params[i].ldc * p_gemm_params[i].n;
 
-    max_sizea = MAX(sizea, max_sizea);
-    max_sizeb = MAX(sizea, max_sizeb);
-    max_sizec = MAX(sizec, max_sizec);
+    max_sizea = std::max(sizea, max_sizea);
+    max_sizeb = std::max(sizea, max_sizeb);
+    max_sizec = std::max(sizec, max_sizec);
 
-    max_m     = MAX(p_gemm_params[i].m, max_m);
-    max_n     = MAX(p_gemm_params[i].n, max_n);
-    max_k     = MAX(p_gemm_params[i].k, max_k);
+    max_m     = std::max(p_gemm_params[i].m, max_m);
+    max_n     = std::max(p_gemm_params[i].n, max_n);
+    max_k     = std::max(p_gemm_params[i].k, max_k);
+    ++i;
   }
 
-  A = mkl_malloc(sizeof(A_TYPE)*max_sizea, MKL_MEM_ALIGNMENT);
-  B = mkl_malloc(sizeof(B_TYPE)*max_sizeb, MKL_MEM_ALIGNMENT);
-  C = mkl_malloc(sizeof(C_TYPE)*max_sizec, MKL_MEM_ALIGNMENT);
+  assert(i == num_gemms);
+
+  A = (A_TYPE*) mkl_malloc(sizeof(A_TYPE)*max_sizea, MKL_MEM_ALIGNMENT);
+  B = (B_TYPE*) mkl_malloc(sizeof(B_TYPE)*max_sizeb, MKL_MEM_ALIGNMENT);
+  C = (C_TYPE*) mkl_malloc(sizeof(C_TYPE)*max_sizec, MKL_MEM_ALIGNMENT);
 #ifdef PACKED_API
   AP = sgemm_alloc("A", &max_m, &max_n, &max_k);
   BP = sgemm_alloc("B", &max_m, &max_n, &max_k);

@@ -39,6 +39,7 @@ OF THIS SOFTWARE, EVEN IF ADVISED OF THE POSSIBILITY OF SUCH DAMAGE.
 */
 
 #include "osu_coll.h"
+#include "all_reduce_problems.h"
 
 int main(int argc, char *argv[])
 {
@@ -51,7 +52,8 @@ int main(int argc, char *argv[])
     int po_ret;
     size_t bufsize;
 
-    int problems[5] = {400000, 12390400, 16777216, 26214400,  67108864};
+    //int problems[5] = {400000, 12390400, 16777216, 26214400,  67108864};
+    int64_t* problems = all_reduce_kernels_size;
 
     set_header(HEADER);
     set_benchmark_name("osu_allreduce");
@@ -113,13 +115,14 @@ int main(int argc, char *argv[])
     }
     set_buffer(recvbuf, options.accel, 0, bufsize);
 
-    print_preamble(rank);
+    print_preamble(rank, numprocs);
 
     size = options.max_message_size/sizeof(float);
 
-    for (j = 0; j < 5; j++)
+    for (j = 0; j < _NUMBER_OF_KERNELS_; j++)
     {
-        size = problems[j]/sizeof(float);
+        //size = problems[j]/sizeof(float);
+        size = problems[j];
     //for(size=1; size*sizeof(float)<= options.max_message_size; size *= 2) {
 
         if(size > LARGE_MESSAGE_SIZE) {
@@ -132,6 +135,7 @@ int main(int argc, char *argv[])
         MPI_Barrier(MPI_COMM_WORLD);
 
         timer=0.0;
+
         for(i=0; i < options.iterations + skip ; i++) {
             t_start = MPI_Wtime();
             MPI_Allreduce(sendbuf, recvbuf, size, MPI_FLOAT, MPI_SUM, MPI_COMM_WORLD );
@@ -142,7 +146,7 @@ int main(int argc, char *argv[])
             }
             MPI_Barrier(MPI_COMM_WORLD);
         }
-        latency = (double)(timer * 1e6) / options.iterations;
+        latency = (double)(timer * 1e3) / options.iterations;
 
         MPI_Reduce(&latency, &min_time, 1, MPI_DOUBLE, MPI_MIN, 0,
                 MPI_COMM_WORLD);

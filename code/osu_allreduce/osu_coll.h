@@ -183,7 +183,7 @@ static void print_header (int rank, int full)
 
         if (print_size) {
             fprintf(stdout, "%-*s", 10, "# Size");
-            fprintf(stdout, "%*s", FIELD_WIDTH, "Avg Latency(us)");
+            fprintf(stdout, "%*s", FIELD_WIDTH, "Avg Latency(ms)");
         }
 
         else {
@@ -191,8 +191,8 @@ static void print_header (int rank, int full)
         }
 
         if (full) {
-            fprintf(stdout, "%*s", FIELD_WIDTH, "Min Latency(us)");
-            fprintf(stdout, "%*s", FIELD_WIDTH, "Max Latency(us)");
+            fprintf(stdout, "%*s", FIELD_WIDTH, "Min Latency(ms)");
+            fprintf(stdout, "%*s", FIELD_WIDTH, "Max Latency(ms)");
             fprintf(stdout, "%*s\n", 12, "Iterations");
         }
 
@@ -268,7 +268,7 @@ enum po_ret_type process_options (int argc, char *argv[]);
 void print_bad_usage_message (int rank);
 void print_help_message (int rank);
 void print_version_message (int rank);
-void print_preamble (int rank);
+void print_preamble (int rank, int numprocs);
 void print_stats (int rank, int size, double avg, double min, double max);
 
 /*

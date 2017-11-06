@@ -39,7 +39,10 @@ int all_reduce(int t_size, cudaStream_t * streams, ncclComm_t * comms, int numGp
     auto start = std::chrono::steady_clock::now();
 
     for (int i = 0; i < numRepeats; i++) {
+        #if NCCL_MAJOR >= 2
         ncclGroupStart();
+        #endif
+
         for (int j = 0; j < numGpus; j++) {
             //CHECK_CUDA_ERROR(cudaSetDevice(j));
             CHECK_NCCL_ERROR(ncclAllReduce((void *) (send_buff[j]),
@@ -50,7 +53,10 @@ int all_reduce(int t_size, cudaStream_t * streams, ncclComm_t * comms, int numGp
                                            comms[j],
                                            streams[j]), 0);
         }
+
+        #if NCCL_MAJOR >= 2
         ncclGroupEnd();
+        #endif
 
         for (int j = 0; j < numGpus; j++) {
             CHECK_CUDA_ERROR(cudaSetDevice(j));

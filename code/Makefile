@@ -1,4 +1,4 @@
-SUBDIRS= nvidia osu_allreduce baidu
+SUBDIRS= nvidia osu_allreduce baidu_allreduce
 
 subdirs: $(SUBDIRS)
 

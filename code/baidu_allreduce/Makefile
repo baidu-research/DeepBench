@@ -5,8 +5,6 @@ ARCH?=sm_52
 
 CUDA_PATH?=/usr/local/cuda
 CUDA_LIB64=$(CUDA_PATH)/lib64
-CUDNN_PATH?=/usr/local/cudnn
-NCCL_PATH?=/usr/local/nccl
 MPI_PATH?=/usr/local/openmpi
 BAIDU_ALLREDUCE_PATH?=/local/baidu-allreduce
 BIN_DIR?=bin
@@ -15,16 +13,11 @@ MKDIR=mkdir -p
 BLAS_LIBRARY?=cublas
 BLAS_PATH?=$(CUDA_LIB64)
 #CONV
-CONV_LIBRARY?=cudnn
-CONV_PATH?=$
 KERNELS_DIR=../kernels/
-PAD_KERNELS?=1
 COMMA=,
 NVCC_ARCH_ARGS=$(foreach a,$(subst $(COMMA), ,$(ARCH)),--generate-code arch=$(patsubst sm_%,compute_%,$(a)),code=$(a))
 
 .PHONY=all ring_all_reduce clean
-
-all: ring_all_reduce
 
 ring_all_reduce:
 	$(MKDIR) $(BIN_DIR)

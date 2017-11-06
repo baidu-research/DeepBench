@@ -75,36 +75,32 @@ export KMP_PLACE_THREADS=1t
 echo THREAD SETTINGS: Affinity $affinitystr Threads $numthreads Placement $KMP_PLACE_THREADS
 
 if [ "$fabric" != "openmpi" ]; then
-  echo "mpirun -ppn $ppncpu -np $numnodes $CENV $CPRO numactl -m 1 $bin"
-  mpirun -ppn $ppncpu -np $numnodes $CENV $CPRO numactl -m 1 $bin
-#  echo "mpiexec.hydra -ppn $ppncpu -np $numnodes -hostfile $hostfile $CENV $CPRO numactl -m 1 $bin"
-#  mpiexec.hydra -ppn $ppncpu -np $numnodes -hostfile $hostfile $CENV $CPRO numactl -m 1 $bin
-#  mpiexec.hydra -ppn $ppncpu -np $numnodes -hostfile $hostfile $CENV $CPRO numactl -m 1 ./$bin
+  echo "mpiexec.hydra -ppn $ppncpu -np $numnodes -hostfile $hostfile $CENV $CPRO numactl -m 1 $bin"
+  mpiexec.hydra -ppn $ppncpu -np $numnodes -hostfile $hostfile $CENV $CPRO numactl -m 1 ./$bin
 else
   echo "mpirun -npernode $ppncpu -np $numnodes -hostfile $hostfile $KNLOPAOPTSOPENMPI taskset -c $list numactl -m 1 $bin"
-  mpirun -npernode $ppncpu -np $numnodes -hostfile $hostfile $KNLOPAOPTSOPENMPI -x KMP_AFFINITY="$affinitystr" -x OMP_NUM_THREADS=$numthreads -x KMP_PLACE_THREADS=1t taskset -c $list numactl -m 1 $bin
-#  mpirun -npernode $ppncpu -np $numnodes -hostfile $hostfile $KNLOPAOPTSOPENMPI -x KMP_AFFINITY="$affinitystr" -x OMP_NUM_THREADS=$numthreads -x KMP_PLACE_THREADS=1t taskset -c $list numactl -m 1 ./$bin
+  mpirun -npernode $ppncpu -np $numnodes -hostfile $hostfile $KNLOPAOPTSOPENMPI -x KMP_AFFINITY="$affinitystr" -x OMP_NUM_THREADS=$numthreads -x KMP_PLACE_THREADS=1t taskset -c $list numactl -m 1 ./$bin
 fi
 
 }
 
 
-if [ $# -ne 3 ]
+if [ $# -ne 2 ]
 then
-  echo "Usage: run_allreduce_ia.sh <osu_allreduce binary> <hostfile> <outdir>"
+  echo "Usage: run_allreduce_ia.sh <osu_allreduce binary> <hostfile>"
   exit
 fi
 
 bin=$1
 hostfile=$2
-outdir=$3
+outdir=
 
 #build with Intel MPI - expect Intel MPI (mpiicc) to be in path
-mpiicc -g -Wall -O3 -std=gnu99  -o osu_allreduce *.c -I ../kernels/
+mpiicc -g -Wall -O3 -std=gnu99  -o osu_allreduce *.c
 
-nodelist="2 4" #"2 4 8 16 32"
+nodelist="2 4 8 16 32"
 
 for nodes in $nodelist; do
-  echo "run_osu $nodes $bin 1 $hostfile > $outdir/out-$nodes.txt"
-  run_osu $nodes $bin 1 $hostfile > $outdir/out-$nodes.txt
+  echo "run_osu $nodes $bin 1 $hostfile > ./$outdir/out-$nodes.txt"
+  run_osu $nodes $bin 1 $hostfile > ./$outdir/out-$nodes.txt
 done

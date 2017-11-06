@@ -44,7 +44,6 @@ OF THIS SOFTWARE, EVEN IF ADVISED OF THE POSSIBILITY OF SUCH DAMAGE.
 int main(int argc, char *argv[])
 {
     int i, j, numprocs, rank, size;
-    int skip;
     double latency = 0.0, t_start = 0.0, t_stop = 0.0;
     double timer=0.0;
     double avg_time = 0.0, max_time = 0.0, min_time = 0.0;
@@ -52,8 +51,9 @@ int main(int argc, char *argv[])
     int po_ret;
     size_t bufsize;
 
-    //int problems[5] = {400000, 12390400, 16777216, 26214400,  67108864};
     int64_t* problems = all_reduce_kernels_size;
+    int64_t* numRepeats = all_reduce_kernels_repeat;
+
 
     set_header(HEADER);
     set_benchmark_name("osu_allreduce");
@@ -121,31 +121,20 @@ int main(int argc, char *argv[])
 
     for (j = 0; j < _NUMBER_OF_KERNELS_; j++)
     {
-        //size = problems[j]/sizeof(float);
         size = problems[j];
-    //for(size=1; size*sizeof(float)<= options.max_message_size; size *= 2) {
-
-        if(size > LARGE_MESSAGE_SIZE) {
-            skip = SKIP_LARGE;
-            options.iterations = options.iterations_large;
-        } else {
-            skip = SKIP;
-        }
-
+        
+        options.iterations = numRepeats[j];
         MPI_Barrier(MPI_COMM_WORLD);
 
-        timer=0.0;
-
-        for(i=0; i < options.iterations + skip ; i++) {
-            t_start = MPI_Wtime();
+        timer = 0.0;
+        t_start = MPI_Wtime();
+        for(i=0; i < options.iterations; i++) {
             MPI_Allreduce(sendbuf, recvbuf, size, MPI_FLOAT, MPI_SUM, MPI_COMM_WORLD );
-            t_stop=MPI_Wtime();
-            if(i>=skip){
-
-            timer+=t_stop-t_start;
-            }
-            MPI_Barrier(MPI_COMM_WORLD);
         }
+
+        t_stop = MPI_Wtime();
+        timer = t_stop-t_start;
+
         latency = (double)(timer * 1e3) / options.iterations;
 
         MPI_Reduce(&latency, &min_time, 1, MPI_DOUBLE, MPI_MIN, 0,

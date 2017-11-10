@@ -17,6 +17,7 @@ CONV_LIBRARY?=cudnn
 CONV_PATH?=$
 KERNELS_DIR=../kernels/
 PAD_KERNELS?=1
+USE_TENSOR_CORES?=1
 COMMA=,
 NVCC_ARCH_ARGS=$(foreach a,$(subst $(COMMA), ,$(ARCH)),--generate-code arch=$(patsubst sm_%,compute_%,$(a)),code=$(a))
 
@@ -30,7 +31,7 @@ gemm:
 
 conv:
 	$(MKDIR) $(BIN_DIR)
-	$(CUDA_PATH)/bin/$(NVCC) conv_bench.cu -DPAD_KERNELS=$(PAD_KERNELS) -o $(BIN_DIR)/conv_bench -I $(KERNELS_DIR) -I $(CUDA_PATH)/include -I $(CUDNN_PATH)/include/ -L $(CUDNN_PATH)/lib64/ -L $(CUDA_LIB64) -lcurand -lcudnn $(NVCC_ARCH_ARGS) -std=c++11
+	$(CUDA_PATH)/bin/$(NVCC) conv_bench.cu -DUSE_TENSOR_OP_MATH=$(USE_TENSOR_CORES) -DPAD_KERNELS=$(PAD_KERNELS) -o $(BIN_DIR)/conv_bench -I $(KERNELS_DIR) -I $(CUDA_PATH)/include -I $(CUDNN_PATH)/include/ -L $(CUDNN_PATH)/lib64/ -L $(CUDA_LIB64) -lcurand -lcudnn $(NVCC_ARCH_ARGS) -std=c++11
 
 rnn:
 	$(MKDIR) $(BIN_DIR)

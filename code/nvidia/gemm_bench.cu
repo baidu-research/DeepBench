@@ -67,7 +67,7 @@ int time_gemm(Tensor<T1> A, Tensor<T1> B, Tensor<T2> C, bool a_t, bool b_t, cubl
     int k = a_t ? A.dims()[0] : A.dims()[1];
     int n = C.dims()[1];
 
-    int numRepeats = std::max(std::ceil(1e11 / (m * k * n)), 10.);
+    int numRepeats = 400;
     cublasStatus_t stat;
 
 #if (__CUDACC_VER_MAJOR__ >= 8)
@@ -117,7 +117,7 @@ int time_gemm(Tensor<T1> A, Tensor<T1> B, Tensor<T2> C, bool a_t, bool b_t, cubl
                 &beta,
                 C.begin(), C_type, C.dims()[0],
                 compute_type,
-                CUBLAS_GEMM_DFALT);
+                CUBLAS_GEMM_DFALT_TENSOR_OP);
 #endif
 
     if (stat != CUBLAS_STATUS_SUCCESS) {
@@ -155,7 +155,7 @@ int time_gemm(Tensor<T1> A, Tensor<T1> B, Tensor<T2> C, bool a_t, bool b_t, cubl
                     &beta,
                     C.begin(), C_type, C.dims()[0],
                     compute_type,
-                    CUBLAS_GEMM_DFALT);
+                    CUBLAS_GEMM_DFALT_TENSOR_OP);
 #endif
         if (stat != CUBLAS_STATUS_SUCCESS) {
             throw std::runtime_error("sgemm failed");
@@ -196,6 +196,14 @@ int main(int argc, char **argv) {
     if (status != CUBLAS_STATUS_SUCCESS) {
         std::cout << "CUBLAS init failed" << std::endl;
     }
+
+    status = cublasSetMathMode(cublas_handle, CUBLAS_TENSOR_OP_MATH);
+
+    if (status != CUBLAS_STATUS_SUCCESS) {
+        std::cout << "CUBLAS math mode failed" << std::endl;
+    }
+
+
 
     curandGenerator_t curand_gen;
 

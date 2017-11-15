@@ -22,6 +22,12 @@
 #define PAD_KERNELS 1
 #endif
 
+#ifndef USE_TENSOR_CORES
+#if __CUDACC_VER_MAJOR__ > 8
+#define USE_TENSOR_CORES 1
+#endif
+#endif
+
 /*
 Usage:
 
@@ -75,11 +81,13 @@ int time_gemm(Tensor<T1> A, Tensor<T1> B, Tensor<T2> C, bool a_t, bool b_t, cubl
     cudaDataType_t B_type = CUDA_R_32F;
     cudaDataType_t C_type = CUDA_R_32F;
     cudaDataType_t compute_type = CUDA_R_32F;
+    cublasGemmAlgo_t algo;
 
     if (std::is_same<T1, uint16_t>::value) {
         A_type = CUDA_R_16F;
         B_type = CUDA_R_16F;
         C_type = CUDA_R_16F;
+        compute_type = CUDA_R_16F;
     }
 
     if (std::is_same<T1, uint8_t>::value) {
@@ -88,6 +96,19 @@ int time_gemm(Tensor<T1> A, Tensor<T1> B, Tensor<T2> C, bool a_t, bool b_t, cubl
         C_type = CUDA_R_32I;
         compute_type = CUDA_R_32I;
     }
+
+    if (USE_TENSOR_CORES)
+        algo = CUBLAS_GEMM_DFALT_TENSOR_OP;
+    else
+        algo = CUBLAS_GEMM_DFALT;
+
+    //std::cout << std::endl;
+    //std::cout << "ComputeT: " << compute_type << std::endl;
+    //std::cout << "Algo: " << algo << std::endl;
+    //std::cout << "USE_TENSOR_CORES " << USE_TENSOR_CORES << std::endl;
+    //std::cout << "A Type: " << A_type << std::endl;
+    //std::cout << "B Type: " << B_type << std::endl;
+    //std::cout << "C Type: " << C_type << std::endl;
 
 #endif
 
@@ -117,7 +138,7 @@ int time_gemm(Tensor<T1> A, Tensor<T1> B, Tensor<T2> C, bool a_t, bool b_t, cubl
                 &beta,
                 C.begin(), C_type, C.dims()[0],
                 compute_type,
-                CUBLAS_GEMM_DFALT_TENSOR_OP);
+                algo);
 #endif
 
     if (stat != CUBLAS_STATUS_SUCCESS) {
@@ -155,7 +176,7 @@ int time_gemm(Tensor<T1> A, Tensor<T1> B, Tensor<T2> C, bool a_t, bool b_t, cubl
                     &beta,
                     C.begin(), C_type, C.dims()[0],
                     compute_type,
-                    CUBLAS_GEMM_DFALT_TENSOR_OP);
+                    algo);
 #endif
         if (stat != CUBLAS_STATUS_SUCCESS) {
             throw std::runtime_error("sgemm failed");
@@ -197,7 +218,9 @@ int main(int argc, char **argv) {
         std::cout << "CUBLAS init failed" << std::endl;
     }
 
+#if USE_TENSOR_CORES && __CUDACC_VER_MAJOR__ > 8
     status = cublasSetMathMode(cublas_handle, CUBLAS_TENSOR_OP_MATH);
+#endif
 
     if (status != CUBLAS_STATUS_SUCCESS) {
         std::cout << "CUBLAS math mode failed" << std::endl;
@@ -245,7 +268,7 @@ int main(int argc, char **argv) {
             if (pad_m%4) {
                 pad_kernels_count++;
                 if (PAD_KERNELS) {
-                    pad_dim(pad_m);
+                    pad_dim(pad_m, 4);
                     need_padding = true;
                 } else {
                     skip_kernel = true;

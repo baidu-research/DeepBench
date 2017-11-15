@@ -25,6 +25,8 @@
 #ifndef USE_TENSOR_CORES
 #if __CUDACC_VER_MAJOR__ > 8
 #define USE_TENSOR_CORES 1
+#else
+#define USE_TENSOR_CORES 0
 #endif
 #endif
 

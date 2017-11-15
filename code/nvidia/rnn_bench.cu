@@ -44,6 +44,14 @@ float, half, int8 for inference
 
 */
 
+#ifndef USE_TENSOR_CORES
+#if CUDNN_MAJOR >= 7
+#define USE_TENSOR_CORES 1
+#else
+#define USE_TENSOR_CORES 0
+#endif
+#endif
+
 
 cudnnHandle_t cudnn_handle;
 curandGenerator_t curand_gen;
@@ -155,7 +163,7 @@ class cudnnRNN {
                                                      &weight_size_,
                                                      type) );
 
-#if CUDNN_MAJOR >= 7
+#if CUDNN_MAJOR >= 7 && USE_TENSOR_CORES
             CHECK_CUDNN_ERROR( cudnnSetRNNMatrixMathType(rnn_desc_.desc(), CUDNN_TENSOR_OP_MATH) );
 #endif
 

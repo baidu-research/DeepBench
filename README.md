@@ -202,13 +202,13 @@ We report the shortest latency achieved from all implementations for each config
 
 #### Topology for NVIDIA 8 GPU System
 Each node has two CPU sockets (dual root topology), and each socket has a PCIe root complex.  For each socket there are two PLX switches that are each connected to the CPU socket via 16 lanes of PCIe v3.  There are two GPUs on each PLX switch. All pairs of GPUs communicate simultaneously over 16 lanes of PCIe v3. The two CPU sockets are connected via Intel QPI. The interconnect across nodes is InfiniBand FDR. The figure below shows a schematic diagram of one our nodes, where all devices connected by the same PCI
-root complex are encapsulated in a dotted box. In our experiment, TitanX Maxwell and M40 were such systems.
+root complex are encapsulated in a dotted box. In our experiments, P100, TitanX Maxwell and M40 were such systems.
 
 ![Topology of NVIDIA GPU system with 8 GPUs](/doc/topology-8gpu-system.png)
 
 #### Topology for NVIDIA 10 GPU System
 Each node has one CPU socket (single root topology) with two PLX switches, each switch are connected to 5 GPUs. The communication among the GPUs in the same PLX switch traverses through the PLX switch only, whereas 
-the communication to any GPU connected to the other PLX switch requires traversal both PLX switches along with the connecting PCIe bridge. In our experiment, P100, TitanX Pascal, and 1080Ti were such systems.
+the communication to any GPU connected to the other PLX switch requires traversal both PLX switches along with the connecting PCIe bridge. In our experiments, TitanX Pascal, and 1080Ti were such systems.
 
 #### Topology for Intel Xeon Phi and Omni-Path System
 The MPI_AllReduce time is measured on Intel Xeon Phi processor 7250 on Intel’s internal Endeavor cluster with Intel® Omni-Path Architecture (Intel® OPA) series 100 fabric with fat-tree topology, using Intel MPI 5.1.3.181.

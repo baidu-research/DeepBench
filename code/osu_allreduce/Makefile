@@ -3,7 +3,7 @@ CC=gcc
 CC_FLAGS= -c -O2 -pthread -Wall -march=native
 
 MPI_PATH?=/usr/local/openmpi
-CUDA_PATH?=/tools/cuda_7.5.18
+CUDA_PATH?=/usr/local/cuda
 MKDIR=mkdir -p
 BIN_DIR?=bin
 KERNELS_DIR=../kernels/

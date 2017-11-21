@@ -191,24 +191,24 @@ version of the benchmark we will not be attempting to test these
 methods.
 
 In order to evaluate All-Reduce, we use the following libraries and benchmarks:
-* [NVIDIA's NCCL](https://github.com/NVIDIA/nccl, https://github.com/NVIDIA/nccl-tests)
+* [NVIDIA's NCCL](https://developer.nvidia.com/nccl)
 * [Ohio State University (OSU) Benchmarks](http://mvapich.cse.ohio-state.edu/benchmarks/)
 * [Baidu's Allreduce](https://github.com/baidu-research/baidu-allreduce/)
 
 The NCCL library can be build without MPI (for single node) and with MPI (for multinode) as shown in https://github.com/NVIDIA/nccl-tests. 
 We therefore have two versions of NCCL for the single node in the experiments. For  multinode experiments,
-we use only NCCL with MPI, the benchmark from OSU, and Baidu's Allreduce implementation. We report 
-the shortest latency achieved from all the four and three implementations on single node and multinode, respectively.
+we use only NCCL with MPI, the benchmark from OSU, and Baidu's Allreduce implementation. 
+We report the shortest latency achieved from all implementations for each configuration.
 
 #### Topology for NVIDIA 8 GPU System
 Each node has two CPU sockets (dual root topology), and each socket has a PCIe root complex.  For each socket there are two PLX switches that are each connected to the CPU socket via 16 lanes of PCIe v3.  There are two GPUs on each PLX switch. All pairs of GPUs communicate simultaneously over 16 lanes of PCIe v3. The two CPU sockets are connected via Intel QPI. The interconnect across nodes is InfiniBand FDR. The figure below shows a schematic diagram of one our nodes, where all devices connected by the same PCI
-root complex are encapsulated in a dotted box
+root complex are encapsulated in a dotted box. In our experiment, TitanX Maxwell and M40 were such systems.
 
 ![Topology of NVIDIA GPU system with 8 GPUs](/doc/topology-8gpu-system.png)
 
 #### Topology for NVIDIA 10 GPU System
 Each node has one CPU socket (single root topology) with two PLX switches, each switch are connected to 5 GPUs. The communication among the GPUs in the same PLX switch traverses through the PLX switch only, whereas 
-the communication to any GPU connected to the other PLX switch requires traversal both PLX switches along with the connecting PCIe bridge.
+the communication to any GPU connected to the other PLX switch requires traversal both PLX switches along with the connecting PCIe bridge. In our experiment, P100, TitanX Pascal, and 1080Ti were such systems.
 
 #### Topology for Intel Xeon Phi and Omni-Path System
 The MPI_AllReduce time is measured on Intel Xeon Phi processor 7250 on Intel’s internal Endeavor cluster with Intel® Omni-Path Architecture (Intel® OPA) series 100 fabric with fat-tree topology, using Intel MPI 5.1.3.181.
@@ -494,11 +494,6 @@ In the results below, inputs and outputs are 16 bit but still use 32 bit compute
 | 16777216           | 8                    | Speech Recognition | 13.42       | 39.99            | TitanX Pascal with InfiniBand FDR |
 | 16777216           | 16                   | Speech Recognition | 46.53       | 23.08            | TitanX Maxwell with InfiniBand FDR |
 | 16777216           | 32                   | Speech Recognition | 49.54       | 43.35            | TitanX Maxwell with InfiniBand FDR |
-
-| Size (# of floats) | Number of Processors | Application        | Time (ms) | Bandwidth (GB/s) | Processor      |
-|--------------------|----------------------|--------------------|-------------|------------------|----------------|
-| 64500000           | 8                    | Speech Recognition | 51.29       | 40.24            | TitanX Pascal with InfiniBand FDR |
-| 64500000           | 16                   | Speech Recognition | 87.47       | 47.19            | TitanX Pascal with InfiniBand FDR |
 | 64500000           | 32                   | Speech Recognition | 97.34       | 84.82            | TitanX Pascal with InfiniBand FDR |
 
 ## Inference Server Results

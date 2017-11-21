@@ -2,7 +2,7 @@
 CC=gcc
 CC_FLAGS= -c -O2 -pthread -Wall -march=native
 
-MPI_PATH?=/tools/openmpi-1.10.2-sm-gcc48-cuda7.5.18-slurm14.11.7
+MPI_PATH?=/usr/local/openmpi
 CUDA_PATH?=/tools/cuda_7.5.18
 MKDIR=mkdir -p
 BIN_DIR?=bin

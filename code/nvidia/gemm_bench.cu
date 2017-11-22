@@ -99,10 +99,11 @@ int time_gemm(Tensor<T1> A, Tensor<T1> B, Tensor<T2> C, bool a_t, bool b_t, cubl
         compute_type = CUDA_R_32I;
     }
 
-    if (USE_TENSOR_CORES)
+#if USE_TENSOR_CORES
         algo = CUBLAS_GEMM_DFALT_TENSOR_OP;
-    else
+#else
         algo = CUBLAS_GEMM_DFALT;
+#endif
 
     //std::cout << std::endl;
     //std::cout << "ComputeT: " << compute_type << std::endl;

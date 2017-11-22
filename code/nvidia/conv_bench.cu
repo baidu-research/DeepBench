@@ -22,7 +22,11 @@
 #endif
 
 #ifndef USE_TENSOR_CORES
+#if CUDNN_MAJOR >= 7
 #define USE_TENSOR_CORES 1
+#else
+#define USE_TENSOR_CORES 0
+#endif
 #endif
 
 

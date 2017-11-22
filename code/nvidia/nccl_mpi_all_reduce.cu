@@ -8,14 +8,19 @@
 
 #include "tensor.h"
 #include "nccl_helper.h"
+#include "all_reduce_problems.h"
 
 int main(int argc, char *argv[]) {
 
     int size, rank;
-    int numRepeats = 1000;
 
-    if (argc > 1)
-        numRepeats = atoi(argv[1]);
+    int mpi_local_rank;
+
+    char* env_str = std::getenv("OMPI_COMM_WORLD_LOCAL_RANK");
+    if(env_str == NULL) {
+		env_str = std::getenv("SLURM_LOCALID");
+    }
+    mpi_local_rank = std::stoi(std::string(env_str));
 
     //Initialize MPI
     MPI_Init(&argc, &argv);
@@ -25,7 +30,7 @@ int main(int argc, char *argv[]) {
     MPI_Barrier(MPI_COMM_WORLD);
 
     // Set cuda devices
-    if (cudaSetDevice(rank) != cudaSuccess) {
+    if (cudaSetDevice(mpi_local_rank) != cudaSuccess) {
         std::stringstream ss;
         ss << "Failed to set cuda device. Rank: " << rank;
         throw std::runtime_error(ss.str());
@@ -46,7 +51,9 @@ int main(int argc, char *argv[]) {
     cudaStreamCreateWithFlags(&stream, cudaStreamNonBlocking);
 
 
-    std::vector<int> sizes = {100000, 3097600, 4194304, 6553600, 16777217};
+    int64_t* sizes = all_reduce_kernels_size;
+    int64_t* numRepeats = all_reduce_kernels_repeat;
+
 
     if (rank == 0) {
         std::cout << " NCCL MPI AllReduce " << std::endl;
@@ -60,13 +67,16 @@ int main(int argc, char *argv[]) {
         std::cout << std::setfill(' ');
 
     }
+    
+    for (int kernel_pos = 0; kernel_pos < _NUMBER_OF_KERNELS_; kernel_pos++) {
 
-    for (auto &t_size: sizes) {
-        auto data = fill<float>({t_size*size}, rank);
+        auto t_size = sizes[kernel_pos];
+ 
+        auto data = fill<float>({(int)t_size*size}, rank);
 
         cudaStreamSynchronize(stream);
         auto start = std::chrono::steady_clock::now();
-        for (int i = 0; i < numRepeats; i++)
+        for (int i = 0; i < numRepeats[kernel_pos]; i++) {
             CHECK_NCCL_ERROR(ncclAllReduce((void *) data.begin(), 
                                            (void *) (data.begin() + t_size), 
                                            t_size, 
@@ -75,10 +85,11 @@ int main(int argc, char *argv[]) {
                                            comm, 
                                            stream), rank);
 
-        cudaStreamSynchronize(stream);
+            cudaStreamSynchronize(stream);
+        }
 
         auto end = std::chrono::steady_clock::now();
-        float time = static_cast<float>(std::chrono::duration<double, std::milli>(end - start).count() / numRepeats);
+        float time = static_cast<float>(std::chrono::duration<double, std::milli>(end - start).count() / numRepeats[kernel_pos]);
 
         float max_time, avg_time;
         MPI_Reduce(&time, &max_time, 1, MPI_FLOAT, MPI_MAX, 0, MPI_COMM_WORLD);

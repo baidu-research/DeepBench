@@ -273,7 +273,7 @@ print_version_message (int rank)
 }
 
 void
-print_preamble (int rank)
+print_preamble (int rank, int numprocs)
 {
     if (rank) return;
 
@@ -289,18 +289,20 @@ print_preamble (int rank)
             break;
     }
 
+    fprintf(stdout, "# Number of Ranks %d\n", numprocs);
+
     if (options.show_size) {
         fprintf(stdout, "%-*s", 10, "# Size");
-        fprintf(stdout, "%*s", FIELD_WIDTH, "Avg Latency(us)");
+        fprintf(stdout, "%*s", FIELD_WIDTH, "Avg Latency(ms)");
     }
 
     else {
-        fprintf(stdout, "# Avg Latency(us)");
+        fprintf(stdout, "# Avg Latency(ms)");
     }
 
     if (options.show_full) {
-        fprintf(stdout, "%*s", FIELD_WIDTH, "Min Latency(us)");
-        fprintf(stdout, "%*s", FIELD_WIDTH, "Max Latency(us)");
+        fprintf(stdout, "%*s", FIELD_WIDTH, "Min Latency(ms)");
+        fprintf(stdout, "%*s", FIELD_WIDTH, "Max Latency(ms)");
         fprintf(stdout, "%*s\n", 12, "Iterations");
     }
 

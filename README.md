@@ -191,22 +191,24 @@ version of the benchmark we will not be attempting to test these
 methods.
 
 In order to evaluate All-Reduce, we use the following libraries and benchmarks:
-* [NVIDIA's NCCL](https://github.com/NVIDIA/nccl)
+* [NVIDIA's NCCL](https://developer.nvidia.com/nccl)
 * [Ohio State University (OSU) Benchmarks](http://mvapich.cse.ohio-state.edu/benchmarks/)
+* [Baidu's Allreduce](https://github.com/baidu-research/baidu-allreduce/)
 
-The NCCL library contains a set of standard communication
-routines. The library supports any number of GPUs in a single node and
-can be run in single process or multi-process (MPI). The NCCL routines
-don't support All-Reduce across multiple nodes. In order to evaluate All-Reduce
-across multiple nodes, we use the benchmarks from OSU. We report the
-shortest latency achieved from all three implementations (NCCL single
-process, NCCL MPI, OpenMPI).
+The NCCL library can be build without MPI (for single node) and with MPI (for multinode) as shown in https://github.com/NVIDIA/nccl-tests. 
+We therefore have two versions of NCCL for the single node in the experiments. For  multinode experiments,
+we use only NCCL with MPI, the benchmark from OSU, and Baidu's Allreduce implementation. 
+We report the shortest latency achieved from all implementations for each configuration.
 
 #### Topology for NVIDIA 8 GPU System
-Each node has two CPU sockets, and each socket has a PCIe root complex.  For each socket there are two PLX switches that are each connected to the CPU socket via 16 lanes of PCIe v3.  There are two GPUs on each PLX switch. All pairs of GPUs communicate simultaneously over 16 lanes of PCIe v3. The two CPU sockets are connected via Intel QPI. The interconnect across nodes is InfiniBand FDR. The figure below shows a schematic diagram of one our nodes, where all devices connected by the same PCI
-root complex are encapsulated in a dotted box
+Each node has two CPU sockets (dual root topology), and each socket has a PCIe root complex.  For each socket there are two PLX switches that are each connected to the CPU socket via 16 lanes of PCIe v3.  There are two GPUs on each PLX switch. All pairs of GPUs communicate simultaneously over 16 lanes of PCIe v3. The two CPU sockets are connected via Intel QPI. The interconnect across nodes is InfiniBand FDR. The figure below shows a schematic diagram of one our nodes, where all devices connected by the same PCI
+root complex are encapsulated in a dotted box. In our experiments, P100, TitanX Maxwell and M40 were such systems.
 
 ![Topology of NVIDIA GPU system with 8 GPUs](/doc/topology-8gpu-system.png)
+
+#### Topology for NVIDIA 10 GPU System
+Each node has one CPU socket (single root topology) with two PLX switches, each switch are connected to 5 GPUs. The communication among the GPUs in the same PLX switch traverses through the PLX switch only, whereas 
+the communication to any GPU connected to the other PLX switch requires traversal both PLX switches along with the connecting PCIe bridge. In our experiments, TitanX Pascal, and 1080Ti were such systems.
 
 #### Topology for Intel Xeon Phi and Omni-Path System
 The MPI_AllReduce time is measured on Intel Xeon Phi processor 7250 on Intel’s internal Endeavor cluster with Intel® Omni-Path Architecture (Intel® OPA) series 100 fabric with fat-tree topology, using Intel MPI 5.1.3.181.
@@ -489,10 +491,10 @@ In the results below, inputs and outputs are 16 bit but still use 32 bit compute
 
 | Size (# of floats) | Number of Processors | Application        | Time (ms) | Bandwidth (GB/s) | Processor      |
 |--------------------|----------------------|--------------------|-------------|------------------|----------------|
-| 16777216           | 8                    | Speech Recognition | 22.06       | 24.34            | TitanX Maxwell with InfiniBand FDR |
-| 16777216           | 16                   | Speech Recognition | 53.76       | 19.97            | Xeon Phi 7250 with Intel® Omni-Path |
-| 16777216           | 32                   | Speech Recognition | 55.68       | 38.57            | Xeon Phi 7250 with Intel® Omni-Path |
-
+| 16777216           | 8                    | Speech Recognition | 13.42       | 39.99            | TitanX Pascal with InfiniBand FDR |
+| 16777216           | 16                   | Speech Recognition | 46.53       | 23.08            | TitanX Maxwell with InfiniBand FDR |
+| 16777216           | 32                   | Speech Recognition | 49.54       | 43.35            | TitanX Maxwell with InfiniBand FDR |
+| 64500000           | 32                   | Speech Recognition | 97.34       | 84.82            | TitanX Pascal with InfiniBand FDR |
 
 ## Inference Server Results
 
@@ -677,6 +679,42 @@ mpirun -np <num_processes> bin/osu_allreduce
 The `osu_allreduce` benchmark can be run with more processes than
 GPUs. However, all our experiments were conducted with each process
 running on a single GPU.
+
+# Baidu Benchmarks
+## Compiling
+
+In order to build the benchmarks, you will need to specify the following paths:
+```
+MPI_PATH: Path to MPI library. The benchmarks have been tested with OpenMPI version 2.0.1.
+CUDA_PATH: Path to CUDA library. The benchmarks have been tested with version 8.0.61.
+BAIDU_ALLREDUCE_PATH: Path to Baidu's allreduce implementation, which is avaiable at https://github.com/baidu-research/baidu-allreduce/.
+```
+
+To build all the benchmarks, please use the following command:
+```
+cd code/
+make CUDA_PATH=<cuda_path> MPI_PATH=<mpi_path> BAIDU_ALLREDUCE_PATH=<baidu_allreduce_path>
+```
+
+Please set the ARCH paramter for appropriate architecture as discussed above in the NVIDIA Benchmarks section.
+
+## Running the Benchmarks
+
+Once compilation completes successfully, the executables will be
+generated in the `bin` directory. Before executing the benchmarks, it
+is important to set your `LD_LIBRARY_PATH` correctly. For bash shells,
+please use:
+
+```
+export LD_LIBRARY_PATH=$LD_LIBRARY_PATH:<cuda_path>:<mpi_path>:<baidu_allreduce_path>
+```
+
+The Baidu All-Reduce benchmark can be run using `mpirun` as shown below:
+
+```
+mpirun -np <num_ranks> bin/ring_all_reduce
+```
+`num_ranks` is used as the total number of GPUs in the system.
 
 # Intel Benchmarks
 # Compiling and Running the Benchmarks

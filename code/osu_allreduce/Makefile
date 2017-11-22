@@ -2,10 +2,11 @@
 CC=gcc
 CC_FLAGS= -c -O2 -pthread -Wall -march=native
 
-MPI_PATH?=/tools/openmpi-1.10.2-sm-gcc48-cuda7.5.18-slurm14.11.7
-CUDA_PATH?=/tools/cuda_7.5.18
+MPI_PATH?=/usr/local/openmpi
+CUDA_PATH?=/usr/local/cuda
 MKDIR=mkdir -p
 BIN_DIR?=bin
+KERNELS_DIR=../kernels/
 
 .PHONY= coll all_reduce build clean
 
@@ -19,7 +20,7 @@ coll:
 	$(CC) -o $(BIN_DIR)/osu_coll.o $(CC_FLAGS) -I$(CUDA_PATH)/include -I$(MPI_PATH)/include  osu_coll.c
 
 allreduce:
-	$(CC) -o $(BIN_DIR)/osu_allreduce.o $(CC_FLAGS) -I$(CUDA_PATH)/include -I$(MPI_PATH)/include osu_allreduce.c
+	$(CC) -o $(BIN_DIR)/osu_allreduce.o $(CC_FLAGS) -I $(KERNELS_DIR) -I$(CUDA_PATH)/include -I$(MPI_PATH)/include osu_allreduce.c
 
 clean:
 	rm -rf $(BIN_DIR)

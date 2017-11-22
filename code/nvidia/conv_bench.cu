@@ -164,6 +164,7 @@ public:
         }
 #endif
 #if CUDNN_MAJOR >= 7 && USE_TENSOR_CORES
+        // Tensor Op math only supports IMPLICIT_PRECOMP_GEMM algorithm
         fwd_algo_ = CUDNN_CONVOLUTION_FWD_ALGO_IMPLICIT_PRECOMP_GEMM;
 #endif
         if (std::is_same<T1, uint8_t>::value) {
@@ -212,6 +213,7 @@ public:
             bwd_params_algo_ = filter_perf.algo;
 #endif
 #if CUDNN_MAJOR >= 7 && USE_TENSOR_CORES
+            // Tensor Op math only supports this algorithm.
             bwd_params_algo_ = CUDNN_CONVOLUTION_BWD_FILTER_ALGO_1;
 #endif
 
@@ -251,6 +253,7 @@ public:
             bwd_inputs_algo_ = data_perf.algo;
 #endif
 #if CUDNN_MAJOR >= 7 && USE_TENSOR_CORES
+            //Tensor Op math only supports this algorithm.
             bwd_inputs_algo_ = CUDNN_CONVOLUTION_BWD_DATA_ALGO_1;
 #endif
 
@@ -545,6 +548,7 @@ int main(int argc, char **argv) {
             }
         }
 #if USE_TENSOR_CORES
+        // Tensor cores need channels to be a multiple of 8. So, added padding for some kernels.
         if (!inference) {
             pad_value = 8;
             if (c % pad_value) {

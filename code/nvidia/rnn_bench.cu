@@ -163,7 +163,7 @@ class cudnnRNN {
                                                      &weight_size_,
                                                      type) );
 
-#if CUDNN_MAJOR >= 7 && USE_TENSOR_CORES
+#if (CUDNN_MAJOR >= 7) && (USE_TENSOR_CORES)
             CHECK_CUDNN_ERROR( cudnnSetRNNMatrixMathType(rnn_desc_.desc(), CUDNN_TENSOR_OP_MATH) );
 #endif
 

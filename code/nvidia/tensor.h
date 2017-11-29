@@ -80,6 +80,7 @@ rand(std::vector<int> dims, curandGenerator_t curand_gen) {
 }
 
 void pad_dim(int & dim, int pad_v) {
+    assert(pad_v > 0);
     if (dim % pad_v) {
         int pad = pad_v - dim%pad_v;
         dim += pad;

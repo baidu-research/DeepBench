@@ -112,7 +112,7 @@ public:
         x_desc_ = TensorDescriptor4d<T1>(format, n, c, h, w);
         w_desc_ = FilterDescriptor4d<T1>(format, k, c, r, s);
 
-#if CUDNN_MAJOR >= 7 && USE_TENSOR_CORES == 1
+#if (CUDNN_MAJOR >= 7) && (USE_TENSOR_CORES)
         cudnnSetConvolutionMathType(conv_desc_.desc(), CUDNN_TENSOR_OP_MATH);
 #endif
         // Get output dimensions
@@ -163,7 +163,7 @@ public:
             fwd_algo_ = fwd_perf.algo;
         }
 #endif
-#if CUDNN_MAJOR >= 7 && USE_TENSOR_CORES
+#if (CUDNN_MAJOR >= 7) && (USE_TENSOR_CORES)
         // Tensor Op math only supports IMPLICIT_PRECOMP_GEMM algorithm
         fwd_algo_ = CUDNN_CONVOLUTION_FWD_ALGO_IMPLICIT_PRECOMP_GEMM;
 #endif
@@ -212,7 +212,7 @@ public:
                                                                          &filter_perf));
             bwd_params_algo_ = filter_perf.algo;
 #endif
-#if CUDNN_MAJOR >= 7 && USE_TENSOR_CORES
+#if (CUDNN_MAJOR >= 7) && (USE_TENSOR_CORES)
             // Tensor Op math only supports this algorithm.
             bwd_params_algo_ = CUDNN_CONVOLUTION_BWD_FILTER_ALGO_1;
 #endif
@@ -252,7 +252,7 @@ public:
                                                                         &data_perf));
             bwd_inputs_algo_ = data_perf.algo;
 #endif
-#if CUDNN_MAJOR >= 7 && USE_TENSOR_CORES
+#if (CUDNN_MAJOR >= 7) && (USE_TENSOR_CORES)
             //Tensor Op math only supports this algorithm.
             bwd_inputs_algo_ = CUDNN_CONVOLUTION_BWD_DATA_ALGO_1;
 #endif
@@ -547,7 +547,7 @@ int main(int argc, char **argv) {
                 }
             }
         }
-#if USE_TENSOR_CORES
+#if (USE_TENSOR_CORES)
         // Tensor cores need channels to be a multiple of 8. So, added padding for some kernels.
         if (!inference) {
             pad_value = 8;

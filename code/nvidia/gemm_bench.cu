@@ -99,19 +99,11 @@ int time_gemm(Tensor<T1> A, Tensor<T1> B, Tensor<T2> C, bool a_t, bool b_t, cubl
         compute_type = CUDA_R_32I;
     }
 
-#if USE_TENSOR_CORES
+#if (USE_TENSOR_CORES)
         algo = CUBLAS_GEMM_DFALT_TENSOR_OP;
 #else
         algo = CUBLAS_GEMM_DFALT;
 #endif
-
-    //std::cout << std::endl;
-    //std::cout << "ComputeT: " << compute_type << std::endl;
-    //std::cout << "Algo: " << algo << std::endl;
-    //std::cout << "USE_TENSOR_CORES " << USE_TENSOR_CORES << std::endl;
-    //std::cout << "A Type: " << A_type << std::endl;
-    //std::cout << "B Type: " << B_type << std::endl;
-    //std::cout << "C Type: " << C_type << std::endl;
 
 #endif
 
@@ -221,7 +213,7 @@ int main(int argc, char **argv) {
         std::cout << "CUBLAS init failed" << std::endl;
     }
 
-#if USE_TENSOR_CORES && __CUDACC_VER_MAJOR__ > 8
+#if (USE_TENSOR_CORES) && (__CUDACC_VER_MAJOR__ > 8)
     status = cublasSetMathMode(cublas_handle, CUBLAS_TENSOR_OP_MATH);
 #endif
 

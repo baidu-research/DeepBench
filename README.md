@@ -374,15 +374,16 @@ processors support 16 bit multiplication and 32 bit addition. Instead, we benchm
 where inputs/outputs are 16 bit but the compute is still in single precision. Support for mixed precision training
 is available in upcoming hardware processors.
 
-| Processor             | Single precision | FP16 inputs/FP32 math |
-|-----------------------|------------------|-----------------------|
-| Nvidia TitanX Maxwell | GEMM, Conv, RNN  |                       |
-| Nvidia Tesla M40      | GEMM, Conv, RNN  |                       |
-| Nvidia 1080Ti         | GEMM, Conv, RNN  |                       |
-| Nvidia TitanX Pascal  | GEMM, Conv, RNN  |                       |
-| Nvidia TitanXp        | GEMM, Conv, RNN  |        |
-| Nvidia Tesla P100     | GEMM, Conv, RNN  | GEMM, Conv, RNN       |
-| Intel Xeon Phi 7250   | GEMM, Conv       |                       |
+| Processor               | Single precision   | FP16 inputs/FP32 math   | FP16 inputs / Mixed Precision Math |
+| ----------------------- | ------------------ | ----------------------- | ---------------------------------- |
+| Nvidia TitanX Maxwell   | GEMM, Conv, RNN    |                         |                                    |
+| Nvidia Tesla M40        | GEMM, Conv, RNN    |                         |                                    |
+| Nvidia 1080Ti           | GEMM, Conv, RNN    |                         |                                    |
+| Nvidia TitanX Pascal    | GEMM, Conv, RNN    |                         |                                    |
+| Nvidia TitanXp          | GEMM, Conv, RNN    |                         |                                    |
+| Nvidia Tesla P100       | GEMM, Conv, RNN    | GEMM, Conv, RNN         |                                    |
+| Nvidia Tesla V100       | GEMM, Conv, RNN    |                         | GEMM, Conv, RNN                    |
+| Intel Xeon Phi 7250     | GEMM, Conv         |                         |                                    |
 
 
 ## Server Deployment
@@ -429,7 +430,8 @@ Training results can be found in the `results/training` folder which contains th
 * `DeepBench_NV_TitanX_Pascal.xlsx`: Training results on NVIDIA's TitanX Pascal GPU
 * `DeepBench_NV_TitanXp.xlsx`: Training results on NVIDIA's TitanXp Pascal GPU
 * `DeepBench_NV_1080Ti.xlxs`: Training results on NVIDIA's 1080 Ti GPU
-* `DeepBench_NV_P100.xlxs`: Training results on NVIDIA's P100 GPU
+* `DeepBench_NV_P100.xlsx`: Training results on NVIDIA's P100 GPU
+* `DeepBench_NV_V100.xlsx`: Training results on NVIDIA's V100 GPU
 
 Detailed inference results can be found in the `results/inference` folder which contains the following files:
 * `server/DeepBench_NV_TitanXp.xlsx`: Inference results on NVIDIA's TitanXp GPUs
@@ -450,21 +452,21 @@ Results on more hardware platforms will be added once they are available. We wel
 
 | Kernel                 | A Transpose | B Transpose | Application        | Time (ms) | TeraFLOPS | Processor     |
 |------------------------|-------------|-------------|--------------------|--------------|-----------|---------------|
-| M=1760, N=128, K=1760  | N           | N           | Speech Recognition | 0.10         | 7.93      | GTX 1080 Ti|
-| M=7860, N=64, K=2560   | N           | N           | Speech Recognition | 0.45         | 5.59      | TitanX Pascal |
-| M=2560, N=64, K=2560   | N           | N           | Speech Recognition | 0.16         | 5.31      | Tesla P100 |
-| M=5124, N=9124, K=2560 | T           | N           | Speech Recognition | 29.51        | 8.21      | Tesla P100 |
-| M=3072, N=128, K=1024  | T           | N           | Speech Recognition | 0.13         | 6.01      | TitanX Pascal |
+| M=1760, N=128, K=1760  | N           | N           | Speech Recognition | 0.07         | 10.72      | Tesla V100 Mixed Precision |
+| M=7860, N=64, K=2560   | N           | N           | Speech Recognition | 0.10         | 25.94      | Tesla V100 Mixed Precision |
+| M=2560, N=64, K=2560   | N           | N           | Speech Recognition | 0.08         | 10.11      | Tesla V100 Mixed Precision |
+| M=5124, N=9124, K=2560 | T           | N           | Speech Recognition | 8.73         | 27.43      | Tesla V100 Mixed Precision |
+| M=3072, N=128, K=1024  | T           | N           | Speech Recognition | 0.04         | 18.73      | Tesla V100 Mixed Precision |
 
 ### Convolution Results
 
 | Input Size                        | Filter Size     | # of Filters   | Padding (h, w)   | Stride (h, w)   | Application          | Total Time (ms)   | Fwd TeraFLOPS   | Processor       |
 | --------------------------------- | --------------- | -------------- | ---------------- | --------------- | -------------------- | ----------------- | --------------- | --------------- |
-| W = 700, H = 161, C = 1, N = 32   | R = 5, S = 20   | 32             | 0, 0             | 2, 2            | Speech Recognition   | 2.64              | 6.74            | TitanXp         |
-| W = 54, H = 54, C = 64, N = 8     | R = 3, S = 3    | 64             | 1, 1             | 1, 1            | Face Recognition     | 0.64              | 10.68           | TitanXp         |
-| W = 224, H = 224, C = 3, N = 16   | R = 3, S = 3    | 64             | 1, 1             | 1, 1            | Computer Vision      | 2.40              | 4.26            | Tesla P100      |
-| W = 7, H = 7,  C = 512, N = 16    | R = 3, S = 3    | 512            | 1, 1             | 1, 1            | Computer Vision      | 1.37              | 7.68            | GTX 1080 Ti     |
-| W = 28, H = 28, C = 192, N = 16   | R = 5, S = 5    | 32             | 2, 2             | 1, 1            | Computer Vision      | 1.57              | 6.45            | TitanX Pascal   |
+| W = 700, H = 161, C = 1, N = 32   | R = 5, S = 20   | 32             | 0, 0             | 2, 2            | Speech Recognition   | 1.53              | 7.75            | Tesla V100 FP32 |
+| W = 54, H = 54, C = 64, N = 8     | R = 3, S = 3    | 64             | 1, 1             | 1, 1            | Face Recognition     | 0.55              | 10.12           | Tesla V100 FP32 |
+| W = 224, H = 224, C = 3, N = 16   | R = 3, S = 3    | 64             | 1, 1             | 1, 1            | Computer Vision      | 2.40              | 1.40            | Tesla V100 FP32 |
+| W = 7, H = 7,  C = 512, N = 16    | R = 3, S = 3    | 512            | 1, 1             | 1, 1            | Computer Vision      | 0.70              | 14.56           | Tesla V100 Mixed Precision |
+| W = 28, H = 28, C = 192, N = 16   | R = 5, S = 5    | 32             | 2, 2             | 1, 1            | Computer Vision      | 0.93              | 16.90           | Tesla V100 FP32  |
 
 ### Recurrent Ops Results
 
@@ -472,20 +474,10 @@ The recurrent op kernels are only run on NVIDIA hardware.
 
 | Hidden Units   | Batch Size   | TimeSteps   | Recurrent Type   | Application           | Total Time (ms) | Fwd TeraFLOPS   | Processor       |
 | -------------- | ------------ | ----------- | ---------------- | --------------------- | ------------    | --------------- | --------------- |
-| 1760           | 16           | 50          | Vanilla          | Speech Recognition    | 7.75            | 1.20            | TitanX Pascal   |
-| 2560           | 32           | 50          | Vanilla          | Speech Recognition    | 21.99           | 1.86            | TitanX Maxwell  |
-| 1024           | 128          | 25          | LSTM             | Machine Translation   | 9.76            | 5.17            | TitanXp         |
-| 2816           | 32           | 1500        | GRU              | Speech Recognition    | 1790.75         | 4.05            | TitanX Pascal   |
-
-### Float16 Performance
-
-In the results below, inputs and outputs are 16 bit but still use 32 bit compute. 
-
-| Kernel                | Application        | Results (ms) | TeraFLOPS | Processor |
-|-----------------------|--------------------|--------------|-----------|-----------|
-| M=1760, N=128, K=1760 | Speech Recognition | 0.23         | 3.42      | P100      |
-| M=7860, N=64, K=2560  | Speech Recognition | 0.61         | 4.15      | P100      |
-| M=2560, N=64, K=2560  | Speech Recognition | 0.33         | 2.57      | P100      |
+| 1760           | 16           | 50          | Vanilla          | Speech Recognition    | 6.75            | 1.46            | Tesla V100 FP32 |
+| 2560           | 32           | 50          | Vanilla          | Speech Recognition    | 11.48           | 3.43            | Tesla V100 Mixed Precision |
+| 1024           | 128          | 25          | LSTM             | Machine Translation   | 6.46            | 12.41           | Tesla V100 Mixed Precision |
+| 2816           | 32           | 1500        | GRU              | Speech Recognition    | 591.02          | 10.45           | Tesla V100 Mixed Precision |
 
 ### All-Reduce Results
 
@@ -604,7 +596,7 @@ ARCH=sm_61 ## Just an example for Pascal architecture
 In some cases, it may be useful to generate benchmarking executables for multiple architectures. For example, some systems may have multiple graphics processors with different architectures installed. The NVIDIA compiler (nvcc) supports the generation of "fat binaries" that contain intermediate and compiled code for multiple target architectures. To compile for multiple architectures, add a comma separated list of architectures to the `make` command line.
 
 ```
-ARCH=sm_30,sm_32,sm_35,sm_50,sm_52,sm_60,sm_61,sm_62     # Everything since Kepler!
+ARCH=sm_30,sm_32,sm_35,sm_50,sm_52,sm_60,sm_61,sm_62,sm_70     # Everything since Kepler!
 ```
 Note that compilation for multiple architectures will take longer than compilation for a single architecture. Also, not all CUDA versions support all architectures. For example, support for sm_60 (and later) require CUDA 8 or later.
 
@@ -615,6 +607,13 @@ For inference problems with `int8` precision, the convolution and gemm kernels n
 make gemm PAD_KERNELS=0
 make conv PAD_KERNELS=0
 ```
+
+In order to use Tensor Cores on NVIDIA's V100 processor, you need to use CUDA 9.0 and cudNN 7.0 or higher. Using the correct libraries, add the following option to the make command:
+
+```
+make USE_TENSOR_CORES=1 ARCH=sm_70
+```
+Convolution operations running Tensor Cores need input and output channels to be a multiple of 8. The benchmarks currently pad the input channels to be a multiple of 8 and report padded numbers.
 
 ## Running the Benchmarks
 

@@ -21,6 +21,14 @@
 #define PAD_KERNELS 1
 #endif
 
+#ifndef USE_TENSOR_CORES
+#if CUDNN_MAJOR >= 7
+#define USE_TENSOR_CORES 1
+#else
+#define USE_TENSOR_CORES 0
+#endif
+#endif
+
 
 /*
 Usage:
@@ -104,6 +112,9 @@ public:
         x_desc_ = TensorDescriptor4d<T1>(format, n, c, h, w);
         w_desc_ = FilterDescriptor4d<T1>(format, k, c, r, s);
 
+#if (CUDNN_MAJOR >= 7) && (USE_TENSOR_CORES)
+        cudnnSetConvolutionMathType(conv_desc_.desc(), CUDNN_TENSOR_OP_MATH);
+#endif
         // Get output dimensions
         CHECK_CUDNN_ERROR(cudnnGetConvolution2dForwardOutputDim(conv_desc_.desc(),
                                                                 x_desc_.desc(),
@@ -113,11 +124,7 @@ public:
                                                                 &out_h,
                                                                 &out_w));
 
-        if (std::is_same<T1, uint8_t>::value) {
-            h_desc_ = TensorDescriptor4d<T1>(CUDNN_TENSOR_NHWC, out_n, out_c, out_h, out_w);
-        } else {
-            h_desc_ = TensorDescriptor4d<T1>(CUDNN_TENSOR_NCHW, out_n, out_c, out_h, out_w);
-        }
+        h_desc_ = TensorDescriptor4d<T1>(format, out_n, out_c, out_h, out_w);
 
         output_dims_ = {out_w, out_h, out_c, out_n};
 
@@ -155,6 +162,10 @@ public:
                                                                    &fwd_perf));
             fwd_algo_ = fwd_perf.algo;
         }
+#endif
+#if (CUDNN_MAJOR >= 7) && (USE_TENSOR_CORES)
+        // Tensor Op math only supports IMPLICIT_PRECOMP_GEMM algorithm
+        fwd_algo_ = CUDNN_CONVOLUTION_FWD_ALGO_IMPLICIT_PRECOMP_GEMM;
 #endif
         if (std::is_same<T1, uint8_t>::value) {
             //Note: cudnn workspace size function doesn't work for INT8_CONFIG
@@ -201,6 +212,11 @@ public:
                                                                          &filter_perf));
             bwd_params_algo_ = filter_perf.algo;
 #endif
+#if (CUDNN_MAJOR >= 7) && (USE_TENSOR_CORES)
+            // Tensor Op math only supports this algorithm.
+            bwd_params_algo_ = CUDNN_CONVOLUTION_BWD_FILTER_ALGO_1;
+#endif
+
             // Backward params workspace
             CHECK_CUDNN_ERROR(cudnnGetConvolutionBackwardFilterWorkspaceSize(cudnn_handle_.handle(),
                                                                              x_desc_.desc(),
@@ -236,6 +252,11 @@ public:
                                                                         &data_perf));
             bwd_inputs_algo_ = data_perf.algo;
 #endif
+#if (CUDNN_MAJOR >= 7) && (USE_TENSOR_CORES)
+            //Tensor Op math only supports this algorithm.
+            bwd_inputs_algo_ = CUDNN_CONVOLUTION_BWD_DATA_ALGO_1;
+#endif
+
             CHECK_CUDNN_ERROR(cudnnGetConvolutionBackwardDataWorkspaceSize(cudnn_handle_.handle(),
                                                                            w_desc_.desc(),
                                                                            h_desc_.desc(),
@@ -475,7 +496,7 @@ int main(int argc, char **argv) {
         std::cout << "total_time (usec)";
     }
 
-    if (PAD_KERNELS && precision == "int8" && inference)
+    if (PAD_KERNELS && ((precision == "int8" && inference) || (USE_TENSOR_CORES && !inference)))
         std::cout << " pad_kerenels  ";
 
     std::cout << "   fwd_algo " << std::endl;
@@ -506,24 +527,41 @@ int main(int argc, char **argv) {
 
 #if CUDNN_MAJOR >= 6
         int padded_c, padded_w, padded_h;
+        int pad_value;
 
         padded_c = c;
         padded_h = h;
         padded_w = w;
 
         if (precision == "int8") {
-            if (c%4 || w%4 || h%4) {
+            pad_value = 4;
+            if (c % pad_value || w % pad_value || h % pad_value) {
                 pad_kernels_count++;
                 if (PAD_KERNELS) {
-                    pad_dim(padded_c);
-                    pad_dim(padded_h);
-                    pad_dim(padded_w);
+                    pad_dim(padded_c, pad_value);
+                    pad_dim(padded_h, pad_value);
+                    pad_dim(padded_w, pad_value);
                     need_padding = true;
                 } else {
                     skip_kernel = true;
                 }
             }
         }
+#if (USE_TENSOR_CORES)
+        // Tensor cores need channels to be a multiple of 8. So, added padding for some kernels.
+        if (!inference) {
+            pad_value = 8;
+            if (c % pad_value) {
+                pad_kernels_count++;
+                if (PAD_KERNELS) {
+                    pad_dim(padded_c, pad_value);
+                    need_padding = true;
+                } else {
+                    skip_kernel = true;
+                }
+            }
+        }
+#endif
 #endif
 
         int fwd_time, bwd_inputs_time, bwd_params_time;
@@ -535,10 +573,10 @@ int main(int argc, char **argv) {
 #if CUDNN_MAJOR >= 6
         if (precision == "float") {
             std::tie(fwd_time, bwd_inputs_time, bwd_params_time, fwd_algo_s) =
-                time_cnn<float, float>(k, c, r, s, n, h, w, pad_h, pad_w, hstride, wstride, num_repeats, curand_gen, inference);
+                time_cnn<float, float>(k, padded_c, r, s, n, padded_h, padded_w, pad_h, pad_w, hstride, wstride, num_repeats, curand_gen, inference);
         } else if (precision == "half") {
             std::tie(fwd_time, bwd_inputs_time, bwd_params_time, fwd_algo_s) =
-                time_cnn<uint16_t, uint16_t>(k, c, r, s, n, h, w, pad_h, pad_w, hstride, wstride, num_repeats, curand_gen, inference);
+                time_cnn<uint16_t, uint16_t>(k, padded_c, r, s, n, padded_h, padded_w, pad_h, pad_w, hstride, wstride, num_repeats, curand_gen, inference);
         } else if ((precision == "int8") && inference) {
             if (!skip_kernel) {
                 std::tie(fwd_time, bwd_inputs_time, bwd_params_time, fwd_algo_s) =
@@ -578,11 +616,18 @@ int main(int argc, char **argv) {
             std::cout << std::setw(15) <<  need_padding;
         }
 
+
+
         if (!inference) {
             std::cout << std::setw(24) << std::setprecision(7) << bwd_inputs_time;
             std::cout << std::setw(24) << std::setprecision(7) << bwd_params_time;
             std::cout << std::setw(19) << std::setprecision(8) << fwd_time + bwd_inputs_time + bwd_params_time;
         }
+
+        if (USE_TENSOR_CORES && PAD_KERNELS && !inference) {
+            std::cout << std::setw(15) <<  need_padding;
+        }
+
 
         std::cout << std::setw(25) << fwd_algo_s;
         std::cout << std::endl;

@@ -323,7 +323,7 @@ public:
     RNNDescriptor() {}
     RNNDescriptor(int hidden_size, int num_layers, cudnnDropoutDescriptor_t dropout_desc,
                   cudnnRNNInputMode_t input_mode, cudnnDirectionMode_t direction,
-                  std::string rnn_type) {
+                  std::string rnn_type, cudnnHandle_t cudnn_handle) {
         cudnnDataType_t type;
         if (std::is_same<T, float>::value)
             type = CUDNN_DATA_FLOAT;
@@ -346,12 +346,18 @@ public:
         else
             throw std::runtime_error("Unknown rnn type");
 
+#if CUDNN_MAJOR >= 7
+        cudnnRNNAlgo_t rnn_algo = CUDNN_RNN_ALGO_STANDARD;
+#endif
 
         cudnnRNNDescriptor_t * desc = new cudnnRNNDescriptor_t;
 
         CHECK_CUDNN_ERROR(cudnnCreateRNNDescriptor(desc));
+
+
 #if CUDNN_MAJOR >= 7
-        CHECK_CUDNN_ERROR(cudnnSetRNNDescriptor_v5(*desc,
+        CHECK_CUDNN_ERROR(cudnnSetRNNDescriptor(cudnn_handle,
+                                                *desc,
 #else
         CHECK_CUDNN_ERROR(cudnnSetRNNDescriptor(*desc,
 #endif
@@ -361,6 +367,9 @@ public:
                                                 input_mode,
                                                 direction,
                                                 rnn_mode,
+#if CUDNN_MAJOR >= 7
+                                                rnn_algo,
+#endif
                                                 type));
 
         desc_.reset(desc, RNNDescriptorDeleter());

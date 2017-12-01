@@ -44,6 +44,14 @@ float, half, int8 for inference
 
 */
 
+#ifndef USE_TENSOR_CORES
+#if CUDNN_MAJOR >= 7
+#define USE_TENSOR_CORES 1
+#else
+#define USE_TENSOR_CORES 0
+#endif
+#endif
+
 
 cudnnHandle_t cudnn_handle;
 curandGenerator_t curand_gen;
@@ -135,7 +143,8 @@ class cudnnRNN {
                                              dropout_.desc(),
                                              CUDNN_SKIP_INPUT,
                                              CUDNN_UNIDIRECTIONAL,
-                                             rnn_type);
+                                             rnn_type,
+                                             cudnn_handle);
             cudnnDataType_t type;
             if (std::is_same<T, float>::value)
                 type = CUDNN_DATA_FLOAT;
@@ -153,6 +162,10 @@ class cudnnRNN {
                                                      xDescArray_.ptr()[0],
                                                      &weight_size_,
                                                      type) );
+
+#if (CUDNN_MAJOR >= 7) && (USE_TENSOR_CORES)
+            CHECK_CUDNN_ERROR( cudnnSetRNNMatrixMathType(rnn_desc_.desc(), CUDNN_TENSOR_OP_MATH) );
+#endif
 
             weights_ = rand<T>(std::vector<int>{static_cast<int>(weight_size_ / sizeof(T)), 1}, curand_gen);
 

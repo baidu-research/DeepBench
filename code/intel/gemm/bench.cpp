@@ -37,6 +37,22 @@
 #define REPEAT 10
 #define MKL_MEM_ALIGNMENT (4*1024)
 
+#ifndef DGEMM_
+#define GEMM_TYPE float
+#define gemm_alloc sgemm_alloc
+#define gemm_compute sgemm_compute
+#define gemm_pack sgemm_pack
+#define gemm_free sgemm_free
+#define gemm sgemm
+#else
+#define GEMM_TYPE double
+#define gemm_alloc dgemm_alloc
+#define gemm_compute dgemm_compute
+#define gemm_pack dgemm_pack
+#define gemm_free dgemm_free
+#define gemm dgemm
+#endif
+
 #ifdef IGEMM_S8U8S32
 #define A_TYPE MKL_INT8
 #define B_TYPE MKL_UINT8
@@ -45,9 +61,9 @@
 #error "packed api is not supported for integer GEMM"
 #endif
 #else
-#define A_TYPE float
-#define B_TYPE float
-#define C_TYPE float
+#define A_TYPE GEMM_TYPE
+#define B_TYPE GEMM_TYPE
+#define C_TYPE GEMM_TYPE
 #endif
 
 typedef struct gemm_params {
@@ -75,10 +91,10 @@ int main(int argc, char *argv[])
   A_TYPE  *A, ao = 0, bo = 0;
   B_TYPE  *B;
   C_TYPE  *C, co = 0;
-  float  alpha = 1.0, beta = 1.0;
+  GEMM_TYPE  alpha = 1.0, beta = 1.0;
   double flops, total_flops = 0., st_time, end_time, ave_time, total_time = 0.;
 #ifdef PACKED_API
-  float *AP, *BP;
+  GEMM_TYPE *AP, *BP;
 #endif
 
   int run_training_set = 1;
@@ -140,8 +156,8 @@ int main(int argc, char *argv[])
   B = (B_TYPE*) mkl_malloc(sizeof(B_TYPE)*max_sizeb, MKL_MEM_ALIGNMENT);
   C = (C_TYPE*) mkl_malloc(sizeof(C_TYPE)*max_sizec, MKL_MEM_ALIGNMENT);
 #ifdef PACKED_API
-  AP = sgemm_alloc("A", &max_m, &max_n, &max_k);
-  BP = sgemm_alloc("B", &max_m, &max_n, &max_k);
+  AP = gemm_alloc("A", &max_m, &max_n, &max_k);
+  BP = gemm_alloc("B", &max_m, &max_n, &max_k);
 #endif
 
 #ifdef IGEMM_S8U8S32
@@ -149,22 +165,22 @@ int main(int argc, char *argv[])
   for (i=0; i<max_sizeb; ++i) B[i] = 22;
   for (i=0; i<max_sizec; ++i) C[i] = 33;
 #else
-  for (i=0; i<max_sizea; ++i) A[i] = (float) drand48();
-  for (i=0; i<max_sizeb; ++i) B[i] = (float) drand48();
-  for (i=0; i<max_sizec; ++i) C[i] = (float) drand48();
+  for (i=0; i<max_sizea; ++i) A[i] = (GEMM_TYPE) drand48();
+  for (i=0; i<max_sizeb; ++i) B[i] = (GEMM_TYPE) drand48();
+  for (i=0; i<max_sizec; ++i) C[i] = (GEMM_TYPE) drand48();
 #endif
 
   for (i=0; i < num_gemms; ++i) {
 
 #ifdef PACKED_API
-    sgemm_pack("A", &p_gemm_params[i].transa, &p_gemm_params[i].m, &p_gemm_params[i].n, &p_gemm_params[i].k, &alpha, A, &p_gemm_params[i].lda, AP);
-    sgemm_pack("B", &p_gemm_params[i].transb, &p_gemm_params[i].m, &p_gemm_params[i].n, &p_gemm_params[i].k, &alpha, B, &p_gemm_params[i].ldb, BP);
+    gemm_pack("A", &p_gemm_params[i].transa, &p_gemm_params[i].m, &p_gemm_params[i].n, &p_gemm_params[i].k, &alpha, A, &p_gemm_params[i].lda, AP);
+    gemm_pack("B", &p_gemm_params[i].transb, &p_gemm_params[i].m, &p_gemm_params[i].n, &p_gemm_params[i].k, &alpha, B, &p_gemm_params[i].ldb, BP);
     // warmup
-    sgemm_compute("P", "P", &p_gemm_params[i].m, &p_gemm_params[i].n, &p_gemm_params[i].k, 
+    gemm_compute("P", "P", &p_gemm_params[i].m, &p_gemm_params[i].n, &p_gemm_params[i].k, 
             AP, &p_gemm_params[i].lda, BP, &p_gemm_params[i].ldb, &beta, C, &p_gemm_params[i].ldc);
     st_time = dsecnd();
     for (j = 0; j < REPEAT; ++j) {
-      sgemm_compute("P", "P", &p_gemm_params[i].m, &p_gemm_params[i].n, &p_gemm_params[i].k, 
+      gemm_compute("P", "P", &p_gemm_params[i].m, &p_gemm_params[i].n, &p_gemm_params[i].k, 
           AP, &p_gemm_params[i].lda, BP, &p_gemm_params[i].ldb, &beta, C, &p_gemm_params[i].ldc);
     }
 #else
@@ -173,7 +189,7 @@ int main(int argc, char *argv[])
     gemm_s8u8s32(&p_gemm_params[i].transa, &p_gemm_params[i].transb, "F", &p_gemm_params[i].m, &p_gemm_params[i].n, &p_gemm_params[i].k, 
         &alpha, A, &p_gemm_params[i].lda, &ao, B, &p_gemm_params[i].ldb, &bo, &beta, C, &p_gemm_params[i].ldc, &co);
 #else
-    sgemm(&p_gemm_params[i].transa, &p_gemm_params[i].transb, &p_gemm_params[i].m, &p_gemm_params[i].n, &p_gemm_params[i].k, 
+    gemm(&p_gemm_params[i].transa, &p_gemm_params[i].transb, &p_gemm_params[i].m, &p_gemm_params[i].n, &p_gemm_params[i].k, 
         &alpha, A, &p_gemm_params[i].lda, B, &p_gemm_params[i].ldb, &beta, C, &p_gemm_params[i].ldc);
 #endif
     // time measurements
@@ -183,7 +199,7 @@ int main(int argc, char *argv[])
       gemm_s8u8s32(&p_gemm_params[i].transa, &p_gemm_params[i].transb, "F", &p_gemm_params[i].m, &p_gemm_params[i].n, &p_gemm_params[i].k, 
           &alpha, A, &p_gemm_params[i].lda, &ao, B, &p_gemm_params[i].ldb, &bo, &beta, C, &p_gemm_params[i].ldc, &co);
 #else
-      sgemm(&p_gemm_params[i].transa, &p_gemm_params[i].transb, &p_gemm_params[i].m, &p_gemm_params[i].n, &p_gemm_params[i].k, 
+      gemm(&p_gemm_params[i].transa, &p_gemm_params[i].transb, &p_gemm_params[i].m, &p_gemm_params[i].n, &p_gemm_params[i].k, 
           &alpha, A, &p_gemm_params[i].lda, B, &p_gemm_params[i].ldb, &beta, C, &p_gemm_params[i].ldc);
 #endif
     }
@@ -196,16 +212,23 @@ int main(int argc, char *argv[])
     ave_time     = 1E6*(end_time - st_time)/REPEAT;
     total_time  += ave_time;
 
-#ifdef IGEMM_S8U8S32
+    #ifdef IGEMM_S8U8S32
     printf("GEMM_S8U8S32(%c,%c,%d,%d,%d) %.1f usec %.5f GOp/sec \n",
         p_gemm_params[i].transa, p_gemm_params[i].transb, 
         p_gemm_params[i].m, p_gemm_params[i].n, p_gemm_params[i].k,
         ave_time, 1E-3*flops/ave_time);
 #else
-    printf("SGEMM(%c,%c,%d,%d,%d) %.1f usec %.5f GFlop/sec \n",
+    #ifdef DGEMM_
+    printf("DGEMM(%c,%c,%d,%d,%d) %.1f usec %.5f GFlop/sec \n",
         p_gemm_params[i].transa, p_gemm_params[i].transb, 
         p_gemm_params[i].m, p_gemm_params[i].n, p_gemm_params[i].k,
         ave_time, 1E-3*flops/ave_time);
+    #else
+        printf("SGEMM(%c,%c,%d,%d,%d) %.1f usec %.5f GFlop/sec \n",
+        p_gemm_params[i].transa, p_gemm_params[i].transb, 
+        p_gemm_params[i].m, p_gemm_params[i].n, p_gemm_params[i].k,
+        ave_time, 1E-3*flops/ave_time);
+    #endif
 #endif
   }
 
@@ -213,8 +236,8 @@ int main(int argc, char *argv[])
   mkl_free(B);
   mkl_free(C);
 #ifdef PACKED_API
-  sgemm_free(AP);
-  sgemm_free(BP);
+  gemm_free(AP);
+  gemm_free(BP);
 #endif
 
 

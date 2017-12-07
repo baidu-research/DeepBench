@@ -22,6 +22,11 @@
 #include <cuda_runtime.h>
 #endif
 
+#ifdef ENABLE_MLSL
+#include "mlsl.h"
+mlsl_environment env;
+#endif
+
 /*
  * GLOBAL VARIABLES
  */
@@ -380,7 +385,12 @@ allocate_buffer (void ** buffer, size_t size, enum accel_type type)
 
     switch (type) {
         case none:
+#ifdef ENABLE_MLSL
+            mlsl_environment_get_env(&env);
+            return mlsl_environment_alloc(env, size, alignment, buffer);
+#else
             return posix_memalign(buffer, alignment, size);
+#endif
 #ifdef _ENABLE_CUDA_
         case cuda:
             cuerr = cudaMalloc(buffer, size);
@@ -413,7 +423,12 @@ free_buffer (void * buffer, enum accel_type type)
 {
     switch (type) {
         case none:
+#ifdef ENABLE_MLSL
+            mlsl_environment_get_env(&env);
+            mlsl_environment_free(env, buffer);
+#else
             free(buffer);
+#endif
             break;
         case cuda:
 #ifdef _ENABLE_CUDA_

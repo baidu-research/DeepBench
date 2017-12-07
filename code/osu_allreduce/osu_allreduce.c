@@ -41,6 +41,30 @@ OF THIS SOFTWARE, EVEN IF ADVISED OF THE POSSIBILITY OF SUCH DAMAGE.
 #include "osu_coll.h"
 #include "all_reduce_problems.h"
 
+#ifdef ENABLE_MLSL
+#include "mlsl.h"
+#define MLSL_CALL(expression)                                             \
+  do                                                                      \
+  {                                                                       \
+      int ret = expression;                                               \
+      if (ret != CMLSL_SUCCESS)                                           \
+      {                                                                   \
+          printf("%s:%d: MLSL error: ret %d\n", __FILE__, __LINE__, ret); \
+          mlsl_environment_finalize(env);                                 \
+          exit(EXIT_FAILURE);                                             \
+      }                                                                   \
+  } while (0)
+mlsl_environment env;
+mlsl_distribution distribution;
+#define FINALIZE()                                                        \
+  do {                                                                    \
+      MLSL_CALL(mlsl_environment_delete_distribution(env, distribution)); \
+      MLSL_CALL(mlsl_environment_finalize(env));                          \
+  } while (0)
+#else
+#define FINALIZE() MPI_Finalize()
+#endif
+
 int main(int argc, char *argv[])
 {
     int i, j, numprocs, rank, size;
@@ -54,9 +78,13 @@ int main(int argc, char *argv[])
     int64_t* problems = all_reduce_kernels_size;
     int64_t* numRepeats = all_reduce_kernels_repeat;
 
-
     set_header(HEADER);
+#ifdef ENABLE_MLSL
+    mlsl_comm_req request;
+    set_benchmark_name("mlsl_osu_allreduce");
+#else
     set_benchmark_name("osu_allreduce");
+#endif
     enable_accel_support();
     po_ret = process_options(argc, argv);
 
@@ -67,22 +95,33 @@ int main(int argc, char *argv[])
         }
     }
 
+#ifdef ENABLE_MLSL
+    MLSL_CALL(mlsl_environment_get_env(&env));
+    MLSL_CALL(mlsl_environment_init(env, &argc, &argv));
+    size_t process_idx, process_count;
+    MLSL_CALL(mlsl_environment_get_process_idx(env, &process_idx));
+    MLSL_CALL(mlsl_environment_get_process_count(env, &process_count));
+    rank = process_idx;
+    numprocs = process_count;
+    MLSL_CALL(mlsl_environment_create_distribution(env, process_count, 1, &distribution));
+#else
     MPI_Init(&argc, &argv);
     MPI_Comm_rank(MPI_COMM_WORLD, &rank);
     MPI_Comm_size(MPI_COMM_WORLD, &numprocs);
+#endif
 
     switch (po_ret) {
         case po_bad_usage:
             print_bad_usage_message(rank);
-            MPI_Finalize();
+            FINALIZE();
             exit(EXIT_FAILURE);
         case po_help_message:
             print_help_message(rank);
-            MPI_Finalize();
+            FINALIZE();
             exit(EXIT_SUCCESS);
         case po_version_message:
             print_version_message(rank);
-            MPI_Finalize();
+            FINALIZE();
             exit(EXIT_SUCCESS);
         case po_okay:
             break;
@@ -93,7 +132,7 @@ int main(int argc, char *argv[])
             fprintf(stderr, "This test requires at least two processes\n");
         }
 
-        MPI_Finalize();
+        FINALIZE();
         exit(EXIT_FAILURE);
     }
 
@@ -122,14 +161,19 @@ int main(int argc, char *argv[])
     for (j = 0; j < _NUMBER_OF_KERNELS_; j++)
     {
         size = problems[j];
-        
+
         options.iterations = numRepeats[j];
         MPI_Barrier(MPI_COMM_WORLD);
 
         timer = 0.0;
         t_start = MPI_Wtime();
         for(i=0; i < options.iterations; i++) {
-            MPI_Allreduce(sendbuf, recvbuf, size, MPI_FLOAT, MPI_SUM, MPI_COMM_WORLD );
+#ifdef ENABLE_MLSL
+            MLSL_CALL(mlsl_distribution_all_reduce(distribution, sendbuf, recvbuf, size, DT_FLOAT, RT_SUM, GT_DATA, &request));
+            MLSL_CALL(mlsl_environment_wait(env, request));
+#else
+            MPI_Allreduce(sendbuf, recvbuf, size, MPI_FLOAT, MPI_SUM, MPI_COMM_WORLD);
+#endif
         }
 
         t_stop = MPI_Wtime();
@@ -152,7 +196,7 @@ int main(int argc, char *argv[])
     free_buffer(sendbuf, options.accel);
     free_buffer(recvbuf, options.accel);
 
-    MPI_Finalize();
+    FINALIZE();
 
     if (none != options.accel) {
         if (cleanup_accel()) {

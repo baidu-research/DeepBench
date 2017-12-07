@@ -1,0 +1,44 @@
+CC          = mpiicc
+CC_FLAGS    = -c -O2
+MPI_PATH   ?= $(I_MPI_ROOT)
+MKDIR       = mkdir -p
+BIN_DIR    ?= bin
+KERNELS_DIR = ../kernels/
+INC_DIRS    = -I$(KERNELS_DIR)
+
+MLSL_PATH ?= $(MLSL_ROOT)
+ifneq ($(MLSL_PATH),)
+	ENABLE_MLSL = 1
+	INC_DIRS   += -I$(MLSL_PATH)/intel64/include
+endif
+
+.PHONY= osu_coll mlsl_osu_coll build clean
+
+all: build
+
+ifeq ($(ENABLE_MLSL), 1)
+build: osu_allreduce mlsl_osu_allreduce
+else
+build: osu_allreduce
+endif
+
+osu_coll:
+	$(MKDIR) $(BIN_DIR)
+	$(CC) -o $(BIN_DIR)/osu_coll.o $(CC_FLAGS) $(INC_DIRS) osu_coll.c
+
+osu_allreduce: osu_coll
+	$(CC) -o $(BIN_DIR)/osu_allreduce.o $(CC_FLAGS) $(INC_DIRS) osu_allreduce.c
+	$(CC) -o $(BIN_DIR)/osu_allreduce $(BIN_DIR)/osu_allreduce.o $(BIN_DIR)/osu_coll.o
+
+mlsl_osu_coll:
+	$(MKDIR) $(BIN_DIR)
+	$(CC) -o $(BIN_DIR)/mlsl_osu_coll.o $(CC_FLAGS) -DENABLE_MLSL $(INC_DIRS) osu_coll.c
+
+mlsl_osu_allreduce: mlsl_osu_coll
+	$(CC) -o $(BIN_DIR)/mlsl_osu_allreduce.o $(CC_FLAGS) -DENABLE_MLSL $(INC_DIRS) osu_allreduce.c
+	$(CC) -o $(BIN_DIR)/mlsl_osu_allreduce $(BIN_DIR)/mlsl_osu_allreduce.o $(BIN_DIR)/mlsl_osu_coll.o -L$(MLSL_PATH)/intel64/lib -lmlsl
+
+clean:
+	rm -rf $(BIN_DIR)
+
+rebuild: clean build

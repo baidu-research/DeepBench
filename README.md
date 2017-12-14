@@ -194,11 +194,16 @@ In order to evaluate All-Reduce, we use the following libraries and benchmarks:
 * [NVIDIA's NCCL](https://developer.nvidia.com/nccl)
 * [Ohio State University (OSU) Benchmarks](http://mvapich.cse.ohio-state.edu/benchmarks/)
 * [Baidu's Allreduce](https://github.com/baidu-research/baidu-allreduce/)
+* [Intel's MLSL](https://github.com/intel/MLSL)
 
 The NCCL library can be build without MPI (for single node) and with MPI (for multinode) as shown in https://github.com/NVIDIA/nccl-tests. 
 We therefore have two versions of NCCL for the single node in the experiments. For  multinode experiments,
 we use only NCCL with MPI, the benchmark from OSU, and Baidu's Allreduce implementation. 
 We report the shortest latency achieved from all implementations for each configuration.
+
+Intel(R) Machine Learning Scaling Library (Intel(R) MLSL) is a library
+providing an efficient implementation of communication patterns used in deep learning.
+In order to evaluate All-Reduce performance, we use All-Reduce benchmark from OSU.
 
 #### Topology for NVIDIA 8 GPU System
 Each node has two CPU sockets (dual root topology), and each socket has a PCIe root complex.  For each socket there are two PLX switches that are each connected to the CPU socket via 16 lanes of PCIe v3.  There are two GPUs on each PLX switch. All pairs of GPUs communicate simultaneously over 16 lanes of PCIe v3. The two CPU sockets are connected via Intel QPI. The interconnect across nodes is InfiniBand FDR. The figure below shows a schematic diagram of one our nodes, where all devices connected by the same PCI
@@ -211,7 +216,8 @@ Each node has one CPU socket (single root topology) with two PLX switches, each 
 the communication to any GPU connected to the other PLX switch requires traversal both PLX switches along with the connecting PCIe bridge. In our experiments, TitanX Pascal, and 1080Ti were such systems.
 
 #### Topology for Intel Xeon Phi and Omni-Path System
-The MPI_AllReduce time is measured on Intel Xeon Phi processor 7250 on Intel’s internal Endeavor cluster with Intel® Omni-Path Architecture (Intel® OPA) series 100 fabric with fat-tree topology, using Intel MPI 5.1.3.181.
+The blocking All-Reduce latency is measured on Intel Xeon Phi processor 7250 on Intel’s internal Endeavor cluster
+with Intel® Omni-Path Architecture (Intel® OPA) series 100 fabric with fat-tree topology, using Intel MPI 2017 Update 3 and Intel MLSL 2017 Update 2 Preview.
 
 # Training Benchmark
 
@@ -481,12 +487,12 @@ The recurrent op kernels are only run on NVIDIA hardware.
 
 ### All-Reduce Results
 
-| Size (# of floats) | Number of Processors | Application        | Time (ms) | Bandwidth (GB/s) | Processor      |
-|--------------------|----------------------|--------------------|-------------|------------------|----------------|
-| 16777216           | 8                    | Speech Recognition | 13.42       | 39.99            | TitanX Pascal with InfiniBand FDR |
-| 16777216           | 16                   | Speech Recognition | 46.53       | 23.08            | TitanX Maxwell with InfiniBand FDR |
-| 16777216           | 32                   | Speech Recognition | 49.54       | 43.35            | TitanX Maxwell with InfiniBand FDR |
-| 64500000           | 32                   | Speech Recognition | 97.34       | 84.82            | TitanX Pascal with InfiniBand FDR |
+| Size (# of floats) | Number of Processors | Application        | Time (ms)   | Bandwidth (GB/s) | Processor                           |
+|--------------------|----------------------|--------------------|-------------|------------------|-------------------------------------|
+| 16777216           | 8                    | Speech Recognition | 8.66        | 61.99            | Xeon Phi 7250 with Intel® Omni-Path |
+| 16777216           | 16                   | Speech Recognition | 14.72       | 72.94            | Xeon Phi 7250 with Intel® Omni-Path |
+| 16777216           | 32                   | Speech Recognition | 19          | 113.03           | Xeon Phi 7250 with Intel® Omni-Path |
+| 64500000           | 32                   | Speech Recognition | 76.68       | 107.67           | Xeon Phi 7250 with Intel® Omni-Path |
 
 ## Inference Server Results
 
@@ -724,6 +730,7 @@ Source all the Intel tools (icc, mkl, mpi) into the path
 source <icc_installdir>/bin/compilervars.sh intel64
 source <mkl_installdir>/bin/mklvars.sh intel64
 source <impi_installdir>/bin/mpivars.sh intel64
+source <mlsl_installdir>/intel64/bin/mlslvars.sh
 ```
 
 Running the Intel GEMM benchmark (MKL 2017)
@@ -739,11 +746,49 @@ source KNL optimized convolution implementation))
 code/intel/convolution/run_conv_ia.sh
 ```
 
-Running the Intel All-Reduce benchmark (Uses the standard OSU benchmark
-compiled/running with Intel MPI)
+The Intel All-Reduce benchmarks use the standard OSU benchmark compiled/running with Intel MPI or with Intel MLSL.
 
+In order to build the Intel All-Reduce benchmarks, you will need to specify the following paths:
 ```
-code/osu_allreduce/run_allreduce_ia.sh <osu_allreduce binary> <hostfile>
+MPI_PATH: Path to Intel MPI library ($I_MPI_ROOT by default). The benchmarks have been tested with Intel MPI 2017 Update 3.
+MLSL_PATH: Path to Intel MLSL library ($MLSL_ROOT by default). The benchmarks have been tested with Intel MLSL 2017 Update 2 Preview.
+```
+and use "Makefile_ia" makefile.
+
+For example (building with default paths):
+```
+make -f Makefile_ia all
+```
+
+Running the Intel All-Reduce benchmarks:
+```
+code/osu_allreduce/run_allreduce_ia.sh <hostfile> <allreduce_binary>
+```
+
+There are 2 possible values for <allreduce_binary>:
+* osu_allreduce - benchmark for blocking All-Reduce over MPI
+* mlsl_osu_allreduce - benchmark for blocking All-Reduce over MLSL
+
+The performance of blocking All-Reduce over MLSL is reported in DeepBench result files.
+
+For example, to run All-Reduce benchmark over MLSL create hostfile with one hostname per line
+and run script as following:
+```
+code/osu_allreduce/run_allreduce_ia.sh <hostfile> mlsl_osu_allreduce
+```
+Script will run benchmark on different scales (2, 4, 8, 16, 32 nodes) and on DeepBench specific message sizes.
+Benchmark will report average latency metric.
+
+For example, benchmark output on 32 KNL/OPA nodes:
+```
+# Size         Avg Latency(ms)
+100000                    0.31
+3097600                   3.59
+4194304                   4.67
+6553600                   7.17
+16777217                 16.80
+38360000                 56.65
+64500000                 75.77
 ```
 
 # ARM Benchmarks

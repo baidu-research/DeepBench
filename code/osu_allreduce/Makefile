@@ -3,7 +3,7 @@ CC=gcc
 CC_FLAGS= -c -O2 -pthread -Wall -march=native
 
 MPI_PATH?=/usr/local/openmpi
-MPI_INCLUDE_PATH?=$(MPI_PATH)
+MPI_INCLUDE_PATH?=$(MPI_PATH)/include
 CUDA_PATH?=/usr/local/cuda
 MKDIR=mkdir -p
 BIN_DIR?=bin

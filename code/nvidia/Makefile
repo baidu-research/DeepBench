@@ -7,7 +7,7 @@ CUDA_LIB64=$(CUDA_PATH)/lib64
 CUDNN_PATH?=/usr/local/cudnn
 NCCL_PATH?=/usr/local/nccl
 MPI_PATH?=/usr/local/openmpi
-MPI_INCLUDE_PATH?=$(MPI_PATH)
+MPI_INCLUDE_PATH?=$(MPI_PATH)/include
 BIN_DIR?=bin
 MKDIR=mkdir -p
 #BLAS

@@ -707,6 +707,12 @@ cd code/
 make CUDA_PATH=<cuda_path> MPI_PATH=<mpi_path> BAIDU_ALLREDUCE_PATH=<baidu_allreduce_path>
 ```
 
+For distributions that split their MPI headers and libraries (e.g. RHEL, Fedora, CentOS) into separate directories you should also specify the path to the include files:
+
+```
+MPI_INCLUDE_PATH=<mpi_include_path>
+```
+
 Please set the ARCH paramter for appropriate architecture as discussed above in the NVIDIA Benchmarks section.
 
 ## Running the Benchmarks

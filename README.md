@@ -593,6 +593,12 @@ cd code/
 make CUDA_PATH=<cuda_path> CUDNN_PATH=<cudnn_path> MPI_PATH=<mpi_path> NCCL_PATH=<nccl_path>
 ```
 
+For distributions that split their MPI headers and libraries (e.g. RHEL, Fedora, CentOS) into separate directories you should also specify the path to the include files:
+
+```
+MPI_INCLUDE_PATH=<mpi_include_path>
+```
+
 You need to build the code for the appropriate architecture. By default, the architecture version is set to 5.2. This works for the TitanX and Tesla M40 GPU. In order build the benchmark for another architecture (such as Pascal with version 6.1), please append the following variable to the `make` command:
 
 ```

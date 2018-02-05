@@ -127,6 +127,7 @@ static inline void rand_fill(T *data, size_t size)
         srand48(1);
         initialized = true;
     }
+#pragma omp parallel for
     for (size_t i = 0; i < size / sizeof(T); i++)
         data[i] = static_cast<T>(drand48());
 }

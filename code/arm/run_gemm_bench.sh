@@ -5,5 +5,5 @@ rm -rf ./bin
 make gemm
 echo build success!
 echo start running!
-bin/gemm_bench
+bin/gemm_bench --device
 echo running complete!

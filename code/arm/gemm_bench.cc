@@ -1,16 +1,19 @@
+#include <getopt.h>
+
 #include <chrono>
 #include <iostream>
 #include <iomanip>
 #include <vector>
+#include <tuple>
 
 #include "gemmlowp/public/gemmlowp.h"
 #include "gemmlowp/test/test.h"
 #include "gemm_problems.h"
 
 template <bool a_t, bool b_t>
-double time_gemm(int m, int n, int k) {
+double time_gemm(int m, int n, int k, int numRepeats, int num_threads) {
     gemmlowp::GemmContext context;
-    context.set_max_num_threads(0);
+    context.set_max_num_threads(num_threads);
     
     typedef gemmlowp::MapOrder Order;
 
@@ -97,7 +100,7 @@ double time_gemm(int m, int n, int k) {
         res_mul,
         res_shift);
 
-    int numRepeats = std::max(std::ceil(1e10 / (m * k * n)), 10.);
+    //int numRepeats = std::max(std::ceil(1e10 / (m * k * n)), 10.);
     auto start = std::chrono::steady_clock::now();
 
     for (int i = 0; i < numRepeats; ++i) {
@@ -115,44 +118,168 @@ double time_gemm(int m, int n, int k) {
      
     auto end = std::chrono::steady_clock::now();
  
-    return std::chrono::duration<double, std::milli>(end - start).count() / numRepeats;
+    return std::chrono::duration<double, std::micro>(end - start).count() / numRepeats;
 }
 
-double time_gemm_helper(int m, int n, int k, bool a_t, bool b_t) {
-#define HANDLE_MATRIX_ORDER(ta, tb)            \
-    if (a_t == ta && b_t == tb) {              \
-        return time_gemm<ta, tb>(m, n, k);     \
+double time_gemm_helper(int m, int n, int k, bool a_t, bool b_t, 
+                        int numRepeats, int num_threads) {
+#define HANDLE_MATRIX_ORDER(ta, tb, repeat, num_threads) \
+    if (a_t == ta && b_t == tb) {                      \
+        return time_gemm<ta, tb>(m, n, k, repeat, num_threads); \
     }
 
-    HANDLE_MATRIX_ORDER(false, false)
-    HANDLE_MATRIX_ORDER(false, true)
-    HANDLE_MATRIX_ORDER(true, false)
-    HANDLE_MATRIX_ORDER(true, true)
+    HANDLE_MATRIX_ORDER(false, false, numRepeats, num_threads)
+    HANDLE_MATRIX_ORDER(false, true, numRepeats, num_threads)
+    HANDLE_MATRIX_ORDER(true, false, numRepeats, num_threads)
+    HANDLE_MATRIX_ORDER(true, true, numRepeats, num_threads)
 
 #undef HANDLE_MATRIX_ORDER
 }
 
-int main(int argc, char** argv) {
-    std::cout << std::setw(30) << "Times" << std::endl;
-    std::cout << std::setfill('-') << std::setw(88) << "-" << std::endl;
-    std::cout << std::setfill(' ');
-    std::cout << "    m       n      k      a_t    b_t    time (msec)     GOPS " << std::endl;
+void print_usage()
+{
+  std::cout << "<app> <args>" << std::endl;
+  std::cout << std::left << std::setw(30) << "\tARGS" << std::endl;
+  std::cout << std::left << std::setw(30) << "\t--training|inference|device" << "\tSelect and run the built in input set" << std::endl;
+  std::cout << std::left << std::setw(30) << "\t--m" << "\tNum rows matrix A" << std::endl;
+  std::cout << std::left << std::setw(30) << "\t--n" << "\tNum cols matrix B" << std::endl;
+  std::cout << std::left << std::setw(30) << "\t--k" << "\tNum cols matrix A, rows Matrix B" << std::endl;
+  std::cout << std::left << std::setw(30) << "\t--ta" << "\tTranspose A" << std::endl;
+  std::cout << std::left << std::setw(30) << "\t--tb" << "\tTranspose B" << std::endl;
+  std::cout << std::left << std::setw(30) << "\t--num-threads" << "\tNumber of threads to spread gemm across (default: 0 (all cpus))" << std::endl;
+  return;
+}
 
-    for (const auto &problem : inference_device_set) {
+int main(int argc, char** argv) {
+    // DEFAULT settings
+    int REPEAT = 10;
+    // Default matrix test size if we are doing a single test
+    int m, n, k;
+    m = 128; n = 128; k = 128;
+    bool ta, tb;
+    ta = false; tb = false;
+    int num_threads = 0;
+    std::vector<std::tuple<int, int, int, bool, bool>>* p_problem_set = nullptr;
+
+    // Use getopt_long here to allow for either driving the benchmark using
+    // built in tests, or make it a gemm tester
+    static struct option long_options[] = {
+        {"training", no_argument, 0, 0},  // These will run the full tests and override customization
+        {"inference", no_argument, 0, 0},
+        {"device", no_argument, 0, 0},
+        {"repeat", required_argument, 0, 0},
+        {"m", required_argument, 0, 0},
+        {"n", required_argument, 0, 0},
+        {"k", required_argument, 0, 0},
+        {"ta", no_argument, 0, 0},
+        {"tb", no_argument, 0, 0},
+        {"num-threads", required_argument, 0, 0},
+        {0, 0, 0, 0}
+    };
+
+    int c = 0;
+    do {
+        int option_index = 0;
+        c = getopt_long(argc, argv, "", long_options, &option_index);
+        switch (c) {
+            case -1:
+                break;
+            case 0:
+                switch (option_index) {
+                    case 0:
+                        if (p_problem_set == nullptr) {
+                            p_problem_set = &training_set;
+                            std::cout << "Running the training benchmark set" << std::endl;
+                        }
+                        break;
+                    case 1:
+                        if (p_problem_set == nullptr) {
+                            p_problem_set = &inference_server_set;
+                            std::cout << "Running the inference server set" << std::endl;
+                        }
+                        break;
+                    case 2:
+                        if (p_problem_set == nullptr) {
+                            p_problem_set = &inference_device_set;
+                            std::cout << "Running the inference device set" << std::endl;
+                        }
+                        break;
+                    case 3:
+                        REPEAT = std::atoi(optarg);
+                        if (REPEAT <= 0) {
+                            std::cerr << "Invalid repeat parameter spec'ed" << std::endl;
+                            return 0;
+                        }
+                        break;
+                    case 4:
+                        m = std::atoi(optarg);
+                        if (m <= 0) {
+                            std::cerr << "Invalid m parameter spec'ed" << std::endl;
+                            return 0;
+                        }
+                        break;
+                    case 5:
+                        n = std::atoi(optarg);
+                        if (n <= 0) {
+                            std::cerr << "Invalid n parameter spec'ed" << std::endl;
+                            return 0;
+                        }
+                        break;
+                    case 6:
+                        k = std::atoi(optarg);
+                        if (k <= 0) {
+                            std::cerr << "Invalid k parameter spec'ed" << std::endl;
+                            return 0;
+                        }
+                        break;
+                    case 7:
+                        ta = true;
+                        break;
+                    case 8:
+                        tb = true;
+                        break;
+                    case 9:
+                        num_threads = std::atoi(optarg);
+                        if (num_threads < 0) {
+                            std::cerr << "Invalid number of threads defined, must be >= 0" << std::endl;
+                        }
+                        break;
+                    default:
+                        break;
+                }
+                break;
+            case '?':
+                print_usage();
+                break;
+            default:
+                print_usage();
+                break;
+        }
+    } while (c != -1);
+
+    if (p_problem_set == nullptr) {
+        p_problem_set = new std::vector<std::tuple<int, int, int, bool, bool> >();
+        p_problem_set->push_back(std::tuple<int, int, int, bool, bool>(m, n, k, ta, tb));
+    }
+
+    std::cout << "GEMMOP,TA,TB,M,N,K,USEC,GOP/s" << std::endl;
+
+    for (const auto &problem : *p_problem_set) {
     	int m, n, k;
     	bool a_t, b_t;
         std::tie(m, n, k, a_t, b_t) = problem;
 
-        double time = time_gemm_helper(m, n, k, a_t, b_t);
-        double mops = 1e-6 * 2 * m * n * k / time; 
+        double time = time_gemm_helper(m, n, k, a_t, b_t, REPEAT, num_threads);
+        double gops = 1e-3 * 2. * m * n * k / time;
 
-        std::cout << std::setw(7) << m;
-        std::cout << std::setw(7) << n;
-        std::cout << std::setw(7) << k;
-        std::cout << std::setw(7) << (a_t ? "t" : "n");
-        std::cout << std::setw(7) << (b_t ? "t" : "n");
-        std::cout << std::setw(13) << std::setprecision(6) << time;
-        std::cout << std::setw(13) << std::setprecision(6) << mops; 
+        std::cout << "GEMMLOWP,";
+        std::cout << (a_t ? "true" : "false") << ",";
+        std::cout << (b_t ? "true" : "false") << ",";
+        std::cout << m << ",";
+        std::cout << n << ",";
+        std::cout << k << ",";
+        std::cout << time << ",";
+        std::cout << gops; 
         std::cout << std::endl;
     }
 

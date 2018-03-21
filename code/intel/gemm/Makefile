@@ -15,11 +15,11 @@
 # ******************************************************************************
 
 CC       =  icc
-CFLAGS	 =  -O2 -Wall -I$(MKLROOT)/include -I../../kernels -qopenmp -std=c++11
+CFLAGS	 =  -O2 -Wall -I$(MKLROOT)/include -I../../kernels -fopenmp -std=c++11
 
-EXTRALIB = -Wl,--start-group $(MKLROOT)/lib/intel64/libmkl_intel_lp64.a $(MKLROOT)/lib/intel64/libmkl_intel_thread.a $(MKLROOT)/lib/intel64/libmkl_core.a -Wl,--end-group -liomp5 -lpthread -lm -ldl
+EXTRALIB = -Wl,--start-group $(MKLROOT)/lib/libmkl_intel_lp64.a $(MKLROOT)/lib/libmkl_intel_thread.a $(MKLROOT)/lib/libmkl_core.a -Wl,--end-group -L$(MKLROOT)/lib/ -liomp5 -lpthread -lm -ldl
 
-all : sbench sbench_pack
+all : sbench sbench_pack ibench_s8u8s32
 
 ibench_s8u8s32 : ibench_s8u8s32.o
 	$(CC) $(CFLAGS) $^  $(EXTRALIB)  -o $@ 

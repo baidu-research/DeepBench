@@ -18,11 +18,13 @@
 #include <float.h>
 #include <time.h>
 #include <assert.h>
+#include <getopt.h>
 
 #include <stdexcept>
 #include <tuple>
 #include <vector>
 #include <string>
+#include <iostream>
 
 struct conv_problem {
     int minibatch;
@@ -50,8 +52,6 @@ struct conv_problem {
 #define TRAINING 0
 #define INFERENCE_SERVER 1
 #define INFERENCE_DEVICE 2
-
-#define ITERS 1000
 
 // Calculates convolution output dimension using the definition from Caffe
 static inline int calc_out_dim(
@@ -352,10 +352,6 @@ static void usage()
     printf(
             "Usage: <executable> [OPTIONS]\n"
             "\n"
-            "Output control:\n"
-            "   --csv-output        Produce CSV output\n"
-            "   --original-output   Produce output in the original format\n"
-            "\n"
             "Control flops calculations:\n"
             "   --no-skip-padding   Count ops with padding zeroes (default)\n"
             "   --skip-padding      Do not count ops with padding zeroes\n"
@@ -367,8 +363,21 @@ static void usage()
             "                       (AVX512_4VNNI CPUs)\n"
             "Problem set control:\n"
             "   --training          Training data set (default)\n"
-            "   --inference-server  Server inference data set\n"
-            "   --inference-device  Device inference data set\n"
+            "   --inference         Server inference data set\n"
+            "   --device            Device inference data set\n"
+            "Custom convolution definition:\n"
+            "   --w                 Width\n"
+            "   --h                 Height\n"
+            "   --c                 \n"
+            "   --n                 \n",
+            "   --k                 \n",
+            "   --filter_w          \n",
+            "   --filter_h          \n",
+            "   --pad_w             \n",
+            "   --pad_h             \n",
+            "   --wstride           \n",
+            "   --hstride           \n",
+            "   --repeat            Number of times to test convolution (default: 50)\n", 
             "\n"
           );
     exit(-1);
@@ -377,36 +386,185 @@ static void usage()
 int main(int argc, char **argv)
 {
     bool skip_padding = false;
-    bool csv_output = false;
     int precision = PREC_F32;
-    std::vector<int> modes
-        = {FWD_CONVOLUTION, BWD_F_CONVOLUTION, BWD_D_CONVOLUTION};
+    std::vector<int> modes = {FWD_CONVOLUTION};
     int problem_set = TRAINING;
+    // DEFAULTS
+    int ITERS = 50;
+    std::vector<std::tuple<unsigned int, unsigned int, unsigned int, unsigned int,
+                       unsigned int, unsigned int, unsigned int,
+                       unsigned int, unsigned int, unsigned int, unsigned int> > *problems = nullptr;
+    unsigned int w, h, c, n, k, filter_w, filter_h, pad_w, pad_h, wstride, hstride;
+    w = 151; h = 40; c = 1; n = 1; k = 32; filter_w = 20; 
+    filter_h = 5; pad_w = 8; pad_h = 8; wstride = 8; hstride = 2; 
 
-    for(argc--, argv++; argc; argv++, argc--) {
-        if (*argv == std::string("--csv-output"))
-            csv_output = true;
-        else if (*argv == std::string("--original-output"))
-            csv_output = false;
-        else if (*argv == std::string("--skip-padding"))
-            skip_padding = true;
-        else if (*argv == std::string("--no-skip-padding"))
-            skip_padding = false;
-        else if (*argv == std::string("--f32"))
-            precision = PREC_F32;
-        else if (*argv == std::string("--u8s8u8"))
-            precision = PREC_U8S8U8;
-        else if (*argv == std::string("--s16s16s32"))
-            precision = PREC_S16S16S32;
-        else if (*argv == std::string("--inference-device"))
-            problem_set = INFERENCE_DEVICE;
-        else if (*argv == std::string("--inference-server"))
-            problem_set = INFERENCE_SERVER;
-        else if (*argv == std::string("--training"))
-            problem_set = TRAINING;
-        else
-            usage();
-    }
+    // Use getopt_long here to allow for either driving the benchmark using
+    // built in tests, or make it a gemm tester
+    static struct option long_options[] = {
+        {"training", no_argument, 0, 0},  // These will run the full tests and override customization
+        {"inference", no_argument, 0, 0},
+        {"device", no_argument, 0, 0},
+        {"repeat", required_argument, 0, 0},
+        {"w", required_argument, 0, 0},
+        {"h", required_argument, 0, 0},
+        {"c", required_argument, 0, 0},
+        {"n", required_argument, 0, 0},
+        {"k", required_argument, 0, 0},
+        {"filter_w", required_argument, 0, 0},
+        {"filter_h", required_argument, 0, 0},
+        {"pad_w", required_argument, 0, 0},
+        {"pad_h", required_argument, 0, 0},
+        {"wstride", required_argument, 0, 0},
+        {"hstride", required_argument, 0, 0},
+        {"no-skip-padding", no_argument, 0, 0},
+        {"skip-padding", no_argument, 0, 0},
+        {"f32", no_argument, 0, 0},
+        {"u8s8u8", no_argument, 0, 0},
+        {"s16s16s32", no_argument, 0, 0},
+        {0, 0, 0, 0}
+    };
+
+    int opt;
+    do {
+        int option_index = 0;
+        opt = getopt_long(argc, argv, "", long_options, &option_index);
+        switch (opt) {
+            case -1:
+                break;
+            case 0:
+                switch (option_index) {
+                    case 0:
+                        if (problems == nullptr) {
+                            problems = &training_set;
+                            modes = {FWD_CONVOLUTION, BWD_F_CONVOLUTION, BWD_D_CONVOLUTION};
+                            std::cout << "Running the training benchmark set" << std::endl;
+                        }
+                        break;
+                    case 1:
+                        if (problems == nullptr) {
+                            problems = &inference_server_set;
+                            std::cout << "Running the inference server set" << std::endl;
+                        }
+                        break;
+                    case 2:
+                        if (problems == nullptr) {
+                            problems = &inference_device_set;
+                            std::cout << "Running the inference device set" << std::endl;
+                        }
+                        break;
+                    case 3:
+                        ITERS = std::atoi(optarg);
+                        if (ITERS <= 0) {
+                            std::cerr << "Invalid repeat parameter spec'ed" << std::endl;
+                            return 0;
+                        }
+                        break;
+                    case 4:
+                        w = std::atoi(optarg);
+                        if (w <= 0) {
+                            std::cerr << "Invalid w parameter spec'ed" << std::endl;
+                            return 0;
+                        }
+                        break;
+                    case 5:
+                        h = std::atoi(optarg);
+                        if (h <= 0) {
+                            std::cerr << "Invalid h parameter spec'ed" << std::endl;
+                            return 0;
+                        }
+                        break;
+                    case 6:
+                        c = std::atoi(optarg);
+                        if (c <= 0) {
+                            std::cerr << "Invalid c parameter spec'ed" << std::endl;
+                            return 0;
+                        }
+                        break;
+                    case 7:
+                        n = std::atoi(optarg);
+                        if (n <= 0) {
+                            std::cerr << "Invalid n parameter spec'ed" << std::endl;
+                            return 0;
+                        }
+                        break;
+                    case 8:
+                        k = std::atoi(optarg);
+                        if (k <= 0) {
+                            std::cerr << "Invalid k parameter spec'ed" << std::endl;
+                            return 0;
+                        }
+                        break;
+                    case 9:
+                        filter_w = std::atoi(optarg);
+                        if (filter_w <= 0) {
+                            std::cerr << "Invalid filter_w paramter spec'ed" << std::endl;
+                            return 0;
+                        }
+                        break;
+                    case 10:
+                        filter_h = std::atoi(optarg);
+                        if (filter_h <= 0) {
+                            std::cerr << "Invalid filter_h parameter spec'ed" << std::endl;
+                            return 0;
+                        }
+                        break;
+                    case 11:
+                        pad_w = std::atoi(optarg);
+                        if (pad_w < 0) {
+                            std::cerr << "Invalid pad_w parameter spec'ed" << std::endl;
+                            return 0;
+                        }
+                        break;
+                    case 12:
+                        pad_h = std::atoi(optarg);
+                        if (pad_h < 0) {
+                            std::cerr << "Invalid pad_h parameter spec'ed" << std::endl;
+                            return 0;
+                        }
+                        break;
+                    case 13:
+                        wstride = std::atoi(optarg);
+                        if (wstride <= 0) {
+                            std::cerr << "Invalid wstride parameter spec'ed" << std::endl;
+                            return 0;
+                        }
+                        break;
+                    case 14:
+                        hstride = std::atoi(optarg);
+                        if (hstride <= 0) {
+                            std::cerr << "Invalid hstride parameter spec'ed" << std::endl;
+                            return 0;
+                        }
+                        break;
+                    case 15:
+                        skip_padding = false;
+                        break;
+                    case 16:
+                        skip_padding = true;
+                        break;
+                    case 17:
+                        precision = PREC_F32;
+                        break;
+                    case 18:
+                        precision = PREC_U8S8U8;
+                        break;
+                    case 19:
+                        precision = PREC_S16S16S32;
+                        break;
+                    default:
+                        break;
+                }
+                break;
+            case '?':
+                usage();
+                return 0;
+                break;
+            default:
+                usage();
+                return 0;
+                break;
+        }
+    } while (opt != -1);
 
 #ifdef USE_MKL
     if (precision != PREC_F32) {
@@ -416,43 +574,31 @@ int main(int argc, char **argv)
     }
 #endif
 
-#ifdef USE_MKLDNN
-    if (precision != PREC_F32 || problem_set != TRAINING)
-        modes = {FWD_CONVOLUTION};
-#endif
+    if (problems == nullptr) {
+        problems = new std::vector<std::tuple<unsigned int, unsigned int, unsigned int, unsigned int,
+                       unsigned int, unsigned int, unsigned int,
+                       unsigned int, unsigned int, unsigned int, unsigned int> >();
+        problems->push_back(std::tuple<unsigned int, unsigned int, unsigned int, unsigned int,
+                       unsigned int, unsigned int, unsigned int,
+                       unsigned int, unsigned int, unsigned int, unsigned int>(w, h, c, n, k, filter_w, 
+                               filter_h, pad_w, pad_h, wstride, hstride));
+    } 
 
     const char *conv_mode_strs[] = {"FWD", "BWD_F", "BWD_D"};
     const char *skip_padding_strs[]
-        = {"w/ padding in flops", "w/o padding in flops"};
+        = {"w/ padding in flops", "w/o padding in flops"}; 
 
-    const auto &problems = (problem_set == TRAINING
-            ? training_set
-            : (problem_set == INFERENCE_DEVICE
-                ? inference_device_set
-                : inference_server_set));
-
+    printf("OP,w,h,c,n,k,filter_w,filter_h,pad_w,pad_h,wstride,hstride,usecs,gops\n");
     for (auto m : modes) {
-        if (!csv_output)
-            printf(" %s Convolution\n", conv_mode_strs[m]);
-        for (const auto& problem : problems) {
+        for (const auto& problem : *problems) {
             conv_problem p;
             std::tie(p.w, p.h, p.ic, p.minibatch, p.oc, p.fw, p.fh,
                     p.pad_w, p.pad_h, p.stride_w, p.stride_h) = problem;
             p.iters = ITERS;
             auto r = bench_conv(p, m, precision, skip_padding);
-            if (csv_output)
-                printf("%s,%d,%d,%d,%d,%d,%d,%d,%d,%d,%d,%d,%d,%e,%e,%e,%e\n",
-                        conv_mode_strs[m], skip_padding,
-                        p.minibatch, p.w, p.h, p.ic, p.oc, p.fw, p.fh,
-                        p.stride_w, p.stride_h, p.pad_w, p.pad_h,
-                        r.min_ms, r.max_gflops, r.avg_ms, r.avg_gflops);
-            else
-                printf("W=%d, H=%d, C=%d, N=%d, K=%d, S=%d, R=%d | "
-                        "%s %s min(ms) %.2f; max(gflop/s) %.2f;"
-                        "avg(ms) %.2f; avg(gflop/s) %.2f;\n",
-                        p.w, p.h, p.ic, p.minibatch, p.oc, p.fw, p.fh,
-                        conv_mode_strs[m], skip_padding_strs[skip_padding],
-                        r.min_ms, r.max_gflops, r.avg_ms, r.avg_gflops);
+            printf("%s,%d,%d,%d,%d,%d,%d,%d,%d,%d,%d,%d,%f,%f\n",
+                   conv_mode_strs[m], p.w, p.h, p.ic, p.minibatch, p.oc,
+                   p.fw, p.fh,p.pad_w,p.pad_h,p.stride_h,p.stride_w,r.avg_ms*1000.0, r.avg_gflops);
             fflush(0);
         }
     }

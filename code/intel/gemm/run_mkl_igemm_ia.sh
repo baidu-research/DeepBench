@@ -34,4 +34,4 @@ echo "------------------------"
 echo " GEMM_S8U8S32 - "
 echo "--------------"
 echo " "
-numactl -m 1 ./ibench_s8u8s32
+numactl -m 0 ./ibench_s8u8s32 0

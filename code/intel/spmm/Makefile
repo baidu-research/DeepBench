@@ -19,7 +19,7 @@ ifeq ($(MKLROOT),)
 endif
 
 EXTRACXXFLAGS = -I$(MKLROOT)/include
-EXTRALIB = -L$(MKLROOT)/lib/intel64/ -lmkl_rt \
+EXTRALIB = -L$(MKLROOT)/lib/ -lmkl_rt \
 		   -Wl,-rpath,$(MKLROOT)/lib/intel64 -liomp5 -lpthread -lm -ldl
 
 ifeq ($(DEBUG), 1)
@@ -28,7 +28,7 @@ else
 OPTFLAGS = -O3 -fopenmp
 endif
 
-CXX      = icpc
+CXX      = g++
 CXXFLAGS = -Wall -std=c++11 $(OPTFLAGS) $(EXTRACXXFLAGS) -I../../kernels
 LFLAGS   = -lrt
 OBJS     = spmm_bench.o

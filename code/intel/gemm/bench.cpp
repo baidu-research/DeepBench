@@ -18,6 +18,7 @@
 #include <stdio.h>
 #include <omp.h>
 #include <assert.h>
+#include <getopt.h>
 
 #include <chrono>
 #include <iomanip>
@@ -34,7 +35,6 @@
 
 #define FIX_LD(x)   (((((x) + 127)/128)*128) + 16)
 
-#define REPEAT 10
 #define MKL_MEM_ALIGNMENT (4*1024)
 
 #ifdef IGEMM_S8U8S32
@@ -63,7 +63,18 @@ typedef struct gemm_params {
     int ldc;
 } gemm_params_t;
 
-
+void print_usage()
+{
+  std::cout << "<app> <args>" << std::endl;
+  std::cout << std::left << std::setw(30) << "\tARGS" << std::endl;
+  std::cout << std::left << std::setw(30) << "\t--training|inference|device" << "\tSelect and run the built in input set" << std::endl;
+  std::cout << std::left << std::setw(30) << "\t--m" << "\tNum rows matrix A" << std::endl;
+  std::cout << std::left << std::setw(30) << "\t--n" << "\tNum cols matrix B" << std::endl;
+  std::cout << std::left << std::setw(30) << "\t--k" << "\tNum cols matrix A, rows Matrix B" << std::endl;
+  std::cout << std::left << std::setw(30) << "\t--ta" << "\tTranspose A" << std::endl;
+  std::cout << std::left << std::setw(30) << "\t--tb" << "\tTranspose B" << std::endl;
+  return;
+}
 
 int main(int argc, char *argv[])
 {
@@ -80,21 +91,113 @@ int main(int argc, char *argv[])
 #ifdef PACKED_API
   float *AP, *BP;
 #endif
+  // DEFAULT settings
+  int REPEAT = 10;
+  // Default matrix test size if we are doing a single test
+  int m, n, k;
+  m = 128; n = 128; k = 128;
+  bool ta, tb;
+  ta = false; tb = false;
+  std::vector<std::tuple<int, int, int, bool, bool>>* p_problem_set = nullptr;
 
-  int run_training_set = 1;
-  if (argc > 1) run_training_set = atoi(argv[1]);
+  // Use getopt_long here to allow for either driving the benchmark using
+  // built in tests, or make it a gemm tester
+  static struct option long_options[] = {
+    {"training", no_argument, 0, 0},  // These will run the full tests and override customization
+    {"inference", no_argument, 0, 0},
+    {"device", no_argument, 0, 0},
+    {"repeat", required_argument, 0, 0},
+    {"m", required_argument, 0, 0},
+    {"n", required_argument, 0, 0},
+    {"k", required_argument, 0, 0},
+    {"ta", no_argument, 0, 0},
+    {"tb", no_argument, 0, 0},
+    {0, 0, 0, 0}
+  };
 
-  std::vector<std::tuple<int, int, int, bool, bool>>* p_problem_set;
-  if (run_training_set) {
-    printf("Running the training benchmark (set first program argument to 0 for inference)\n");
-    p_problem_set = &training_set;
-  } else {
-    printf("Running the inference benchmark (first program argument is 0)\n");
-    p_problem_set = &inference_server_set;
+  int c;
+  do {
+    int option_index = 0;
+    c = getopt_long(argc, argv, "", long_options, &option_index);
+    switch (c) {
+      case -1:
+        break;
+      case 0:
+        switch (option_index) {
+          case 0:
+            if (p_problem_set == nullptr) {
+              p_problem_set = &training_set;
+              std::cout << "Running the training benchmark set" << std::endl;
+            }
+            break;
+          case 1:
+            if (p_problem_set == nullptr) {
+              p_problem_set = &inference_server_set;
+              std::cout << "Running the inference server set" << std::endl;
+            }
+            break;
+          case 2:
+            if (p_problem_set == nullptr) {
+              p_problem_set = &inference_device_set;
+              std::cout << "Running the inference device set" << std::endl;
+            }
+            break;
+          case 3:
+            REPEAT = std::atoi(optarg);
+            if (REPEAT <= 0) {
+              std::cerr << "Invalid repeat parameter spec'ed" << std::endl;
+              return 0;
+            }
+            break;
+          case 4:
+            m = std::atoi(optarg);
+            if (m <= 0) {
+              std::cerr << "Invalid m parameter spec'ed" << std::endl;
+              return 0;
+            }
+            break;
+          case 5:
+            n = std::atoi(optarg);
+            if (n <= 0) {
+              std::cerr << "Invalid n parameter spec'ed" << std::endl;
+              return 0;
+            }
+            break;
+          case 6:
+            k = std::atoi(optarg);
+            if (k <= 0) {
+              std::cerr << "Invalid k parameter spec'ed" << std::endl;
+              return 0;
+            }
+            break;
+          case 7:
+            ta = true;
+            break;
+          case 8:
+            tb = true;
+            break;
+          default:
+            break;
+        }
+        break;
+      case '?':
+        print_usage();
+        return 0;
+        break;
+      default:
+        print_usage();
+        return 0;
+        break;
+    }
+  } while (c != -1);
+
+  if (p_problem_set == nullptr) {
+    p_problem_set = new std::vector<std::tuple<int, int, int, bool, bool> >();
+    p_problem_set->push_back(std::tuple<int, int, int, bool, bool>(m, n, k, ta, tb));
   }
 
   num_gemms = p_problem_set->size();
-  gemm_params_t* p_gemm_params = (gemm_params_t*) _mm_malloc(num_gemms*sizeof(gemm_params_t), 64);
+  gemm_params_t* p_gemm_params = (gemm_params_t*) mkl_malloc(num_gemms*sizeof(gemm_params_t), 64);
 
   i = 0;
   for (const auto &problem : *p_problem_set) {
@@ -154,6 +257,9 @@ int main(int argc, char *argv[])
   for (i=0; i<max_sizec; ++i) C[i] = (float) drand48();
 #endif
 
+  // Define the CSV format
+  std::cout << "GEMMOP,TA,TB,M,N,K,USEC,GOP/S" << std::endl;
+
   for (i=0; i < num_gemms; ++i) {
 
 #ifdef PACKED_API
@@ -197,13 +303,13 @@ int main(int argc, char *argv[])
     total_time  += ave_time;
 
 #ifdef IGEMM_S8U8S32
-    printf("GEMM_S8U8S32(%c,%c,%d,%d,%d) %.1f usec %.5f GOp/sec \n",
-        p_gemm_params[i].transa, p_gemm_params[i].transb, 
+    printf("GEMM_S8U8S32,%s,%s,%d,%d,%d,%.1f,%.5f\n",
+        p_gemm_params[i].ta ? "true":"false", p_gemm_params[i].tb ? "true":"false", 
         p_gemm_params[i].m, p_gemm_params[i].n, p_gemm_params[i].k,
         ave_time, 1E-3*flops/ave_time);
 #else
-    printf("SGEMM(%c,%c,%d,%d,%d) %.1f usec %.5f GFlop/sec \n",
-        p_gemm_params[i].transa, p_gemm_params[i].transb, 
+    printf("SGEMM,%s,%s,%d,%d,%d,%.1f,%.5f\n",
+        p_gemm_params[i].ta ? "true":"false", p_gemm_params[i].tb ? "true":"false", 
         p_gemm_params[i].m, p_gemm_params[i].n, p_gemm_params[i].k,
         ave_time, 1E-3*flops/ave_time);
 #endif
@@ -216,7 +322,6 @@ int main(int argc, char *argv[])
   sgemm_free(AP);
   sgemm_free(BP);
 #endif
-
 
 #ifdef IGEMM_S8U8S32
   printf("Total time %.1f usec, Overall Performance: %.5f GOp/sec \n", total_time, 1E-3*total_flops/total_time);

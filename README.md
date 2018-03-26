@@ -71,9 +71,9 @@ supplied libraries are most representative of users' experience.
 ## Entry
 
 DeepBench includes training results for seven hardware platforms, NVIDIA's
-TitanX, M40, TitanX Pascal, TitanXp, 1080 Ti, P100 and Intel's Knights
+TitanX, M40, P40, TitanX Pascal, TitanXp, 1080 Ti, P100 and Intel's Knights
 Landing. Inference results are included for three server platforms, NVIDIA's
-TitanX Pascal, TitanXp and 1080 Ti. Inference results are also included 
+TitanX Pascal, P40, P100, TitanXp and 1080 Ti. Inference results are also included 
 for three mobile devices iPhone 6 &7, RaspBerry Pi 3. We provide an overview of the
 results and all results are available in the `results` folder. We will
 gladly accept pull requests for new hardware platforms.

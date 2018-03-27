@@ -214,7 +214,8 @@ std::tuple<int, int, int> time_rnn(
     int bwd_inputs_time = 0;
     int bwd_params_time = 0;
 
-    if (!inference) {
+    if (!inference) 
+    {
         //Warm up
         rnn.backward_data(y, dy, dhy, dcy,
                           hx, cx, dx, dhx, dcx);
@@ -223,7 +224,8 @@ std::tuple<int, int, int> time_rnn(
 
         start = std::chrono::steady_clock::now();
 
-        for (int i = 0; i < num_repeats; ++i) {
+        for (int i = 0; i < num_repeats; ++i) 
+        {
             rnn.backward_data(y, dy, dhy, dcy,
                               hx, cx, dx, dhx, dcx);
         }

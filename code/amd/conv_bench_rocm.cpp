@@ -105,45 +105,45 @@ public:
         fwd_algo_ = perfResults.fwd_algo;
 
 
-    CHECK_MIOPEN_ERROR(miopenConvolutionBackwardWeightsGetWorkSpaceSize(
-                miopen_handle_.handle(),
-                                                  h_desc_.desc(),
-                                                  x_desc_.desc(),
-                                                  conv_desc_.desc(),
-                                                  w_desc_.desc(),
-                                                  &bwd_params_workspace_size_));
-    u = std::vector<int>{static_cast<int>(bwd_params_workspace_size_ / sizeof(float)), 1};
-    bwd_params_workspace_ = zeros(u);
+        CHECK_MIOPEN_ERROR(miopenConvolutionBackwardWeightsGetWorkSpaceSize(
+                    miopen_handle_.handle(),
+                                                    h_desc_.desc(),
+                                                    x_desc_.desc(),
+                                                    conv_desc_.desc(),
+                                                    w_desc_.desc(),
+                                                    &bwd_params_workspace_size_));
+        u = std::vector<int>{static_cast<int>(bwd_params_workspace_size_ / sizeof(float)), 1};
+        bwd_params_workspace_ = zeros(u);
 
-    CHECK_MIOPEN_ERROR(miopenFindConvolutionBackwardWeightsAlgorithm(
-      miopen_handle_.handle(),
-      h_desc_.desc(),
-      h.begin(),
-      x_desc_.desc(),
-      x.begin(),
-      conv_desc_.desc(),
-      w_desc_.desc(),
-      w.begin(),
-      requestAlgoCount,
-      &returnedAlgoCount,
-      &perfResults,
-      bwd_params_workspace_.begin(),
-      bwd_params_workspace_size_,
-      false
-    ));
+        CHECK_MIOPEN_ERROR(miopenFindConvolutionBackwardWeightsAlgorithm(
+        miopen_handle_.handle(),
+        h_desc_.desc(),
+        h.begin(),
+        x_desc_.desc(),
+        x.begin(),
+        conv_desc_.desc(),
+        w_desc_.desc(),
+        w.begin(),
+        requestAlgoCount,
+        &returnedAlgoCount,
+        &perfResults,
+        bwd_params_workspace_.begin(),
+        bwd_params_workspace_size_,
+        false
+        ));
 
-    bwd_params_algo_ = perfResults.bwd_weights_algo;
+        bwd_params_algo_ = perfResults.bwd_weights_algo;
 
-    CHECK_MIOPEN_ERROR(miopenConvolutionBackwardDataGetWorkSpaceSize(
-                miopen_handle_.handle(),
-                                                  h_desc_.desc(),
-                                                  w_desc_.desc(),
-                                                  conv_desc_.desc(),
-                                                  x_desc_.desc(),
-                                                  &bwd_inputs_workspace_size_));
+        CHECK_MIOPEN_ERROR(miopenConvolutionBackwardDataGetWorkSpaceSize(
+                    miopen_handle_.handle(),
+                                                    h_desc_.desc(),
+                                                    w_desc_.desc(),
+                                                    conv_desc_.desc(),
+                                                    x_desc_.desc(),
+                                                    &bwd_inputs_workspace_size_));
 
-    u = std::vector<int>{static_cast<int>(bwd_inputs_workspace_size_ / sizeof(float)), 1};
-    bwd_inputs_workspace_ = zeros(u);
+        u = std::vector<int>{static_cast<int>(bwd_inputs_workspace_size_ / sizeof(float)), 1};
+        bwd_inputs_workspace_ = zeros(u);
 
         CHECK_MIOPEN_ERROR(miopenFindConvolutionBackwardDataAlgorithm(
           miopen_handle_.handle(),

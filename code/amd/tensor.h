@@ -38,31 +38,36 @@ public:
     std::vector<int> dims() const { return dims_; }
 };
 
-Tensor<float> fill(std::vector<int> dims, float val) {
-     Tensor<float> tensor(dims);
+template<typename T>
+Tensor<T> fill(std::vector<int> dims, T val) {
+     Tensor<T> tensor(dims);
      size_t d = std::accumulate(dims.begin(), dims.end(), 1, std::multiplies<int>());
-     std::vector<float> host_ptr(d);
+     std::vector<T> host_ptr(d);
      std::fill(host_ptr.begin(), host_ptr.end(), val);
-     hipMemcpy(tensor.ptr_.get(), host_ptr.data(), d*sizeof(float), hipMemcpyHostToDevice);
+     hipMemcpy(tensor.ptr_.get(), host_ptr.data(), d*sizeof(T), hipMemcpyHostToDevice);
      return tensor;
 }
 
-Tensor<float> zeros(std::vector<int> dims) {
-
-    Tensor<float> tensor(dims);
+template<typename T>
+Tensor<T> zeros(std::vector<int> dims)
+{
+    Tensor<T> tensor(dims);
     size_t d = std::accumulate(dims.begin(), dims.end(), 1, std::multiplies<int>());
-    hipMemset(tensor.ptr_.get(), 0, d*sizeof(float));
+    hipMemset(tensor.ptr_.get(), 0, d*sizeof(T));
     return tensor;
 }
 
-Tensor<float> rand(std::vector<int> dims) {
-    Tensor<float> tensor(dims);
+template<typename T>
+Tensor<T> rand(std::vector<int> dims) 
+{
+    Tensor<T> tensor(dims);
     size_t d = std::accumulate(dims.begin(), dims.end(), 1, std::multiplies<int>());
-    std::vector<float> host_ptr(d);
+    std::vector<T> host_ptr(d);
     std::srand(std::time(0));
-    for(int i=0;i<d;i++) {
+    for(int i=0;i<d;i++) 
+    {
       host_ptr[i] = std::rand();
     }
-    hipMemcpy(tensor.ptr_.get(), host_ptr.data(), d*sizeof(float), hipMemcpyHostToDevice);
+    hipMemcpy(tensor.ptr_.get(), host_ptr.data(), d*sizeof(T), hipMemcpyHostToDevice);
     return tensor;
 }

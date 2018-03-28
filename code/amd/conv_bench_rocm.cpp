@@ -329,7 +329,7 @@ std::tuple<int, int, int, std::string> time_cnn(
 
 int main(int argc, char **argv) {
 
-    int num_repeats = 100;
+    int num_repeats = 300;
 
     hipFree(0);
 
@@ -339,7 +339,7 @@ int main(int argc, char **argv) {
     std::cout << std::setw(30) << "Times" << std::endl;
     std::cout << std::setfill('-') << std::setw(190) << "-" << std::endl;
     std::cout << std::setfill(' ');
-    std::cout << "   w      h      c      n      k      r      s    pad_w  pad_h    stride_w  stride_h    fwd_time (usec)  bwd_inputs_time (usec)  bwd_params_time (usec)  total_time (usec)   fwd_algo " << std::endl;
+    std::cout << "   w      h      c      n      k      f_w      f_h    pad_w  pad_h    stride_w  stride_h    fwd_time (usec)  bwd_inputs_time (usec)  bwd_params_time (usec)  total_time (usec)   fwd_algo " << std::endl;
     std::cout << std::setfill('-') << std::setw(190) << "-" << std::endl;
     std::cout << std::setfill(' ');
 
@@ -347,7 +347,7 @@ int main(int argc, char **argv) {
     for (const auto &problem : training_set) {
 
         // Filter parameters
-        int k, c, r, s;
+        int k, c, r, s; // r - filter_h (f_h), s - filter_w (f_w)
 
         // Input parameters
         int n, w, h;
@@ -358,7 +358,7 @@ int main(int argc, char **argv) {
         // Stride
         int wstride, hstride;
 
-        std::tie(w, h, c, n, k, r, s, pad_w, pad_h, wstride, hstride) = problem;
+        std::tie(w, h, c, n, k, s, r, pad_w, pad_h, wstride, hstride) = problem;
 
         int fwd_time, bwd_inputs_time, bwd_params_time;
         std::string fwd_algo_s;
@@ -371,8 +371,8 @@ int main(int argc, char **argv) {
         std::cout << std::setw(7) << c;
         std::cout << std::setw(7) << n;
         std::cout << std::setw(7) << k;
-        std::cout << std::setw(7) << r;
         std::cout << std::setw(7) << s;
+        std::cout << std::setw(7) << r;
         std::cout << std::setw(7) << pad_w;
         std::cout << std::setw(8) << pad_h;
         std::cout << std::setw(10) << wstride;

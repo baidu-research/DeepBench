@@ -5,6 +5,7 @@
 #include <vector>
 
 #include <miopen/miopen.h>
+#include <half.hpp>
 
 #include "hip_helper.h"
 
@@ -67,6 +68,8 @@ public:
         miopenDataType_t type;
         if (std::is_same<T, float>::value)
             type = miopenFloat;
+        else if (std::is_same<T, half_float::half>::value)
+            type = miopenHalf;
         else
             throw std::runtime_error("Unknown type");
 
@@ -109,6 +112,8 @@ public:
         miopenDataType_t type;
         if (std::is_same<T, float>::value)
             type = miopenFloat;
+        else if (std::is_same<T, half_float::half>::value)
+            type = miopenHalf;
         else
             throw std::runtime_error("Unknown type");
 
@@ -125,38 +130,6 @@ public:
     }
 
     miopenTensorDescriptor_t * ptr() const { return desc_array_.get(); }
-};
-
-template<typename T>
-class FilterDescriptorNd {
-    std::shared_ptr<miopenTensorDescriptor_t> desc_;
-
-    struct FilterDescriptorNdDeleter {
-        void operator()(miopenTensorDescriptor_t * desc) {
-            miopenDestroyTensorDescriptor(*desc);
-            delete desc;
-        }
-    };
-
-public:
-
-    FilterDescriptorNd() {}
-
-    FilterDescriptorNd(const std::vector<int> dim) {
-        miopenDataType_t type;
-        if (std::is_same<T, float>::value)
-            type = miopenFloat;
-        else
-            throw std::runtime_error("Unknown type");
-
-        miopenTensorDescriptor_t * desc = new miopenTensorDescriptor_t;
-        CHECK_MIOPEN_ERROR(miopenCreateTensorDescriptor(desc));
-        CHECK_MIOPEN_ERROR(miopenSet4dTensorDescriptor(*desc, type, dim[0], dim[1], dim[2], dim[3]));
-
-        desc_.reset(desc, FilterDescriptorNdDeleter());
-    }
-
-    miopenTensorDescriptor_t desc() { return *desc_; }
 };
 
 template<typename T>
@@ -177,6 +150,8 @@ public:
         miopenDataType_t type;
         if (std::is_same<T, float>::value)
             type = miopenFloat;
+        else if (std::is_same<T, half_float::half>::value)
+            type = miopenHalf;
         else
             throw std::runtime_error("Unknown type");
 
@@ -212,6 +187,8 @@ public:
         miopenDataType_t type;
         if (std::is_same<T, float>::value)
             type = miopenFloat;
+        else if (std::is_same<T, half_float::half>::value)
+            type = miopenHalf;
         else
             throw std::runtime_error("Unknown type");
 

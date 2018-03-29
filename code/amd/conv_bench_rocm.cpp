@@ -358,7 +358,7 @@ int main(int argc, char **argv) {
         // Stride
         int wstride, hstride;
 
-        std::tie(w, h, c, n, k, r, s, pad_w, pad_h, wstride, hstride) = problem;
+        std::tie(w, h, c, n, k, s, r, pad_w, pad_h, wstride, hstride) = problem;
 
         int fwd_time, bwd_inputs_time, bwd_params_time;
         std::string fwd_algo_s;

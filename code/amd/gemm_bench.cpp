@@ -80,9 +80,9 @@ int main(int argc, char **argv) {
         bool a_t, b_t;
         std::tie(m, n, k, a_t, b_t) = problem;
 
-        auto a = rand({a_t ? k : m, a_t ? m : k});
-        auto b = rand({b_t ? n : k, b_t ? k : n});
-        auto c = zeros({m, n});
+        auto a = rand<float>({a_t ? k : m, a_t ? m : k});
+        auto b = rand<float>({b_t ? n : k, b_t ? k : n});
+        auto c = zeros<float>({m, n});
 
         std::cout << std::setw(7) << m;
         std::cout << std::setw(7) << n;

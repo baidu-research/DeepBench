@@ -16,7 +16,7 @@ CONV_PATH?=$
 
 INC_DIR=${SOURCE_DIR}/../kernels
 
-all: conv gemm 
+all: conv rnn gemm 
 
 #OPT=-g -O0 -fsanitize=undefined -fno-omit-frame-pointer
 OPT=-O3
@@ -25,6 +25,10 @@ TARGETS=
 conv:
 	$(MKDIR) $(BIN_DIR)
 	$(HIPCC) ${SOURCE_DIR}/conv_bench_rocm.cpp -o $(BIN_DIR)/conv_bench -I$(ROCM_PATH)/include -I$(INC_DIR) -l$(CONV_LIBRARY) $(OPT) -std=c++11 --amdgpu-target=gfx900
+
+rnn:
+	$(MKDIR) $(BIN_DIR)
+	$(HIPCC) ${SOURCE_DIR}/rnn_bench_rocm.cpp -o $(BIN_DIR)/rnn_bench -I$(ROCM_PATH)/include -I$(INC_DIR) -l$(CONV_LIBRARY) $(OPT) -std=c++11 --amdgpu-target=gfx900
 
 gemm:
 	$(MKDIR) $(BIN_DIR)

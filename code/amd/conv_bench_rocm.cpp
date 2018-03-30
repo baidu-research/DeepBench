@@ -377,6 +377,9 @@ int main(int argc, char **argv) {
         }
         else if(precision == "half")
         {
+            if( r == 1 && s == 1 && pad_w > 0 && pad_h > 0 )  // fp16 doesn't support this case yet
+                continue;
+
             std::tie(fwd_time, bwd_inputs_time, bwd_params_time, fwd_algo_s) =
                 time_cnn<half_float::half>(k, c, r, s, n, h, w, pad_h, pad_w, hstride, wstride, num_repeats);
         }

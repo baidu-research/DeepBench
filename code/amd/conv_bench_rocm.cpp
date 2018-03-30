@@ -6,16 +6,18 @@
 
 #include <hip/hip_runtime.h>
 #include <hip/hip_runtime_api.h>
+#include <half.hpp>
 
 #include "tensor.h"
 #include "miopen_helper.h"
 #include "conv_problems.h"
 
+template<typename T>
 class miopenCNN {
-    TensorDescriptor4d<float> x_desc_;
-    TensorDescriptor4d<float> h_desc_;
+    TensorDescriptor4d<T> x_desc_;
+    TensorDescriptor4d<T> h_desc_;
 
-    FilterDescriptor4d<float> w_desc_;
+    FilterDescriptor4d<T> w_desc_;
 
     std::vector<int> output_dims_;
     int num_repeats_;
@@ -28,7 +30,7 @@ class miopenCNN {
     Tensor<float> bwd_inputs_workspace_;
     Tensor<float> bwd_params_workspace_;
 
-    Tensor<float> h;
+    Tensor<T> h;
 
     miopenConvFwdAlgorithm_t fwd_algo_;
     miopenConvBwdDataAlgorithm_t bwd_inputs_algo_;
@@ -43,7 +45,7 @@ class miopenCNN {
 public:
 
     miopenCNN(int _w, int _h, int c, int n, int k, int r, int s,
-             int pad_w, int pad_h, int wstride, int hstride, Tensor<float> x, Tensor<float> w)
+             int pad_w, int pad_h, int wstride, int hstride, Tensor<T> x, Tensor<T> w)
              :
         miopen_handle_(),
         x_desc_(n, c, _h, _w),
@@ -61,11 +63,11 @@ public:
                                                                 &out_h,
                                                                 &out_w));
 
-        h_desc_ = TensorDescriptor4d<float>(out_n, out_c, out_h, out_w);
+        h_desc_ = TensorDescriptor4d<T>(out_n, out_c, out_h, out_w);
 
         output_dims_ = {out_w, out_h, out_c, out_n};
 
-        h = zeros<float>(output_dims_);
+        h = zeros<T>(output_dims_);
 
 
         // Set fwd workspace size
@@ -166,7 +168,7 @@ public:
 
     }
 
-    Tensor<float> getOutputTensor(){ return h; }
+    Tensor<T> getOutputTensor(){ return h; }
 
     std::vector<int> get_output_dims() { return output_dims_; }
 
@@ -187,7 +189,7 @@ public:
     }
 
 
-    void forward(Tensor<float> x, Tensor<float> filter, Tensor<float> h) {
+    void forward(Tensor<T> x, Tensor<T> filter, Tensor<T> h) {
 
         // Convolution forward.
         CHECK_MIOPEN_ERROR(miopenConvolutionForward(miopen_handle_.handle(),
@@ -207,7 +209,7 @@ public:
 
     }
 
-    void backward_params(Tensor<float> x, Tensor<float> delta, Tensor<float> dW) {
+    void backward_params(Tensor<T> x, Tensor<T> delta, Tensor<T> dW) {
 
         CHECK_MIOPEN_ERROR(miopenConvolutionBackwardWeights(miopen_handle_.handle(),
                                                          &alpha_,
@@ -227,7 +229,7 @@ public:
 
     }
 
-    void backward_inputs(Tensor<float> filter, Tensor<float> delta, Tensor<float> dX) {
+    void backward_inputs(Tensor<T> filter, Tensor<T> delta, Tensor<T> dX) {
 
         CHECK_MIOPEN_ERROR(miopenConvolutionBackwardData(miopen_handle_.handle(),
                                                       &alpha_,
@@ -247,6 +249,7 @@ public:
     }
 };
 
+template<typename T>
 std::tuple<int, int, int, std::string> time_cnn(
          int k, int c, int r, int s,
          int n, int h, int w,
@@ -257,11 +260,11 @@ std::tuple<int, int, int, std::string> time_cnn(
 
 
     // Allocate memory for filter
-    auto filter = rand<float>(std::vector<int>{r, s, c, k});
+    auto filter = rand<T>(std::vector<int>{r, s, c, k});
 
     // Allocate memory for input
-    auto input = rand<float>(std::vector<int>{w, h, c, n});
-    miopenCNN cnn(w, h, c, n, k, r, s, pad_w, pad_h, wstride, hstride, input, filter);
+    auto input = rand<T>(std::vector<int>{w, h, c, n});
+    miopenCNN<T> cnn(w, h, c, n, k, r, s, pad_w, pad_h, wstride, hstride, input, filter);
 
     // Allocate memory for output tensor
     auto output = cnn.getOutputTensor();
@@ -283,8 +286,8 @@ std::tuple<int, int, int, std::string> time_cnn(
     int fwd_time = static_cast<int>(std::chrono::duration<double, std::micro>(end - start).count() / num_repeats);
 
     // Allocate memory for backward pass wrt weights
-    auto delta = rand<float>(cnn.get_output_dims());
-    auto dW = zeros<float>(std::vector<int>{r, s, c, k});
+    auto delta = rand<T>(cnn.get_output_dims());
+    auto dW = zeros<T>(std::vector<int>{r, s, c, k});
 
     // Warm up backward
     cnn.backward_params(input, delta, dW);
@@ -303,7 +306,7 @@ std::tuple<int, int, int, std::string> time_cnn(
     int bwd_params_time = static_cast<int>(std::chrono::duration<double, std::micro>(end - start).count() / num_repeats);
 
     //Allocate memory for backward pass wrt inputs
-    auto dX = zeros<float>(std::vector<int>{w, h, c, n});
+    auto dX = zeros<T>(std::vector<int>{w, h, c, n});
 
     //Warm up backward inputs
     cnn.backward_inputs(filter, delta, dX);
@@ -330,11 +333,15 @@ std::tuple<int, int, int, std::string> time_cnn(
 int main(int argc, char **argv) {
 
     int num_repeats = 300;
+    std::string precision ="float";
 
     hipFree(0);
 
     if (argc > 1)
+    {
         num_repeats = atoi(argv[1]);
+        precision = argv[2];
+    }
 
     std::cout << std::setw(30) << "Times" << std::endl;
     std::cout << std::setfill('-') << std::setw(190) << "-" << std::endl;
@@ -363,8 +370,16 @@ int main(int argc, char **argv) {
         int fwd_time, bwd_inputs_time, bwd_params_time;
         std::string fwd_algo_s;
 
-        std::tie(fwd_time, bwd_inputs_time, bwd_params_time, fwd_algo_s) =
-            time_cnn(k, c, r, s, n, h, w, pad_h, pad_w, hstride, wstride, num_repeats);
+        if( precision == "float" )
+        {
+            std::tie(fwd_time, bwd_inputs_time, bwd_params_time, fwd_algo_s) =
+                time_cnn<float>(k, c, r, s, n, h, w, pad_h, pad_w, hstride, wstride, num_repeats);
+        }
+        else if(precision == "half")
+        {
+            std::tie(fwd_time, bwd_inputs_time, bwd_params_time, fwd_algo_s) =
+                time_cnn<half_float::half>(k, c, r, s, n, h, w, pad_h, pad_w, hstride, wstride, num_repeats);
+        }
 
         std::cout << std::setw(5) << w;
         std::cout << std::setw(7) << h;

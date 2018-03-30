@@ -5,6 +5,7 @@
 #include <vector>
 
 #include <miopen/miopen.h>
+#include <half.hpp>
 
 #include "hip_helper.h"
 
@@ -43,10 +44,10 @@ public:
 };
 
 template<typename T>
-class TensorDescriptorNd {
+class TensorDescriptor {
     std::shared_ptr<miopenTensorDescriptor_t> desc_;
 
-    struct TensorDescriptorNdDeleter {
+    struct TensorDescriptorDeleter {
         void operator()(miopenTensorDescriptor_t * desc) {
             miopenDestroyTensorDescriptor(*desc);
             delete desc;
@@ -54,21 +55,29 @@ class TensorDescriptorNd {
     };
 
 public:
+    TensorDescriptor()
+    {
+        miopenTensorDescriptor_t * desc = new miopenTensorDescriptor_t;
+        CHECK_MIOPEN_ERROR(miopenCreateTensorDescriptor(desc));
 
-    TensorDescriptorNd(const std::vector<int>& dim,
-                       const std::vector<int>& stride) {
+        desc_.reset(desc, TensorDescriptorDeleter());
+    }
+
+    TensorDescriptor(std::vector<int> lens,
+                     std::vector<int> strides) {
         miopenDataType_t type;
         if (std::is_same<T, float>::value)
             type = miopenFloat;
+        else if (std::is_same<T, half_float::half>::value)
+            type = miopenHalf;
         else
             throw std::runtime_error("Unknown type");
 
         miopenTensorDescriptor_t * desc = new miopenTensorDescriptor_t;
-
         CHECK_MIOPEN_ERROR(miopenCreateTensorDescriptor(desc));
-        CHECK_MIOPEN_ERROR(miopenSet4dTensorDescriptor(*desc, type, dim[0], dim[1], dim[2], dim[3]));
+        CHECK_MIOPEN_ERROR(miopenSetTensorDescriptor(*desc, type, static_cast<int>(lens.size()), &lens[0], &strides[0]));
 
-        desc_.reset(desc, TensorDescriptorNdDeleter());
+        desc_.reset(desc, TensorDescriptorDeleter());
     }
 
     miopenTensorDescriptor_t desc() const { return *desc_; }
@@ -76,10 +85,12 @@ public:
 };
 
 template<typename T>
-class TensorDescriptorNdArray {
+class TensorDescriptorArray
+{
     std::shared_ptr<miopenTensorDescriptor_t> desc_array_;
 
-    struct ArrayDeleter {
+    struct ArrayDeleter 
+    {
         int num_;
         ArrayDeleter(int num) : num_(num) {}
 
@@ -92,61 +103,33 @@ class TensorDescriptorNdArray {
         }
     };
 
-    public:
+public:
 
-    TensorDescriptorNdArray(std::vector<int> dim,
-                            std::vector<int> stride,
-                            int num) {
+    TensorDescriptorArray(std::vector<int> lens,
+                            std::vector<int> strides,
+                            int num) 
+    {
         miopenDataType_t type;
         if (std::is_same<T, float>::value)
             type = miopenFloat;
+        else if (std::is_same<T, half_float::half>::value)
+            type = miopenHalf;
         else
             throw std::runtime_error("Unknown type");
 
         miopenTensorDescriptor_t * desc_array = new miopenTensorDescriptor_t[num];
 
-        for (int i = 0; i < num; ++i) {
+        for (int i = 0; i < num; ++i) 
+        {
             CHECK_MIOPEN_ERROR(miopenCreateTensorDescriptor(&desc_array[i]));
-            CHECK_MIOPEN_ERROR(miopenSet4dTensorDescriptor(desc_array[i], type,
-                                          dim[0], dim[1], dim[2], dim[3]));
+            CHECK_MIOPEN_ERROR(miopenSetTensorDescriptor(desc_array[i], type, lens.size(),
+                                          &lens[0], &strides[0]) );
         }
 
         desc_array_.reset(desc_array, ArrayDeleter(num));
     }
 
     miopenTensorDescriptor_t * ptr() const { return desc_array_.get(); }
-};
-
-template<typename T>
-class FilterDescriptorNd {
-    std::shared_ptr<miopenTensorDescriptor_t> desc_;
-
-    struct FilterDescriptorNdDeleter {
-        void operator()(miopenTensorDescriptor_t * desc) {
-            miopenDestroyTensorDescriptor(*desc);
-            delete desc;
-        }
-    };
-
-public:
-
-    FilterDescriptorNd() {}
-
-    FilterDescriptorNd(const std::vector<int> dim) {
-        miopenDataType_t type;
-        if (std::is_same<T, float>::value)
-            type = miopenFloat;
-        else
-            throw std::runtime_error("Unknown type");
-
-        miopenTensorDescriptor_t * desc = new miopenTensorDescriptor_t;
-        CHECK_MIOPEN_ERROR(miopenCreateTensorDescriptor(desc));
-        CHECK_MIOPEN_ERROR(miopenSet4dTensorDescriptor(*desc, type, dim[0], dim[1], dim[2], dim[3]));
-
-        desc_.reset(desc, FilterDescriptorNdDeleter());
-    }
-
-    miopenTensorDescriptor_t desc() { return *desc_; }
 };
 
 template<typename T>
@@ -167,6 +150,8 @@ public:
         miopenDataType_t type;
         if (std::is_same<T, float>::value)
             type = miopenFloat;
+        else if (std::is_same<T, half_float::half>::value)
+            type = miopenHalf;
         else
             throw std::runtime_error("Unknown type");
 
@@ -202,6 +187,8 @@ public:
         miopenDataType_t type;
         if (std::is_same<T, float>::value)
             type = miopenFloat;
+        else if (std::is_same<T, half_float::half>::value)
+            type = miopenHalf;
         else
             throw std::runtime_error("Unknown type");
 
@@ -244,5 +231,43 @@ public:
 
     miopenConvolutionDescriptor_t desc() const { return *desc_; };
 
+};
+
+class RNNDescriptor {
+    std::shared_ptr<miopenRNNDescriptor_t> desc_;
+
+    struct RNNDescriptorDeleter {
+        void operator()(miopenRNNDescriptor_t * desc) {
+            miopenDestroyRNNDescriptor(*desc);
+            delete desc;
+        }
+    };
+public:
+
+    RNNDescriptor() {}
+
+    RNNDescriptor(const int hsize,
+                  const int nlayers,
+                  miopenRNNInputMode_t inMode,
+                  miopenRNNDirectionMode_t direction,
+                  miopenRNNMode_t rnnMode,
+                  miopenRNNBiasMode_t biasMode,
+                  miopenRNNAlgo_t algo,
+                  miopenDataType_t dataType) :
+        desc_(new miopenRNNDescriptor_t, RNNDescriptorDeleter()) 
+    {
+        CHECK_MIOPEN_ERROR(miopenCreateRNNDescriptor(desc_.get()));
+        CHECK_MIOPEN_ERROR(miopenSetRNNDescriptor(*desc_,
+                                                  hsize,
+                                                  nlayers,
+                                                  inMode,
+                                                  direction,
+                                                  rnnMode,
+                                                  biasMode,
+                                                  algo,
+                                                  dataType));
+    }
+
+    miopenRNNDescriptor_t desc() const { return *desc_; };
 };
 

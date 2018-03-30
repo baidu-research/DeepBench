@@ -65,7 +65,7 @@ public:
 
         output_dims_ = {out_w, out_h, out_c, out_n};
 
-        h = zeros(output_dims_);
+        h = zeros<float>(output_dims_);
 
 
         // Set fwd workspace size
@@ -79,7 +79,7 @@ public:
 
         std::vector<int> u = std::vector<int>{static_cast<int>(fwd_workspace_size_ / sizeof(float)), 1};
 
-        fwd_workspace_ = zeros(u);
+        fwd_workspace_ = zeros<float>(u);
 
         const int requestAlgoCount = 1;
         int returnedAlgoCount;
@@ -113,7 +113,7 @@ public:
                                                   w_desc_.desc(),
                                                   &bwd_params_workspace_size_));
     u = std::vector<int>{static_cast<int>(bwd_params_workspace_size_ / sizeof(float)), 1};
-    bwd_params_workspace_ = zeros(u);
+    bwd_params_workspace_ = zeros<float>(u);
 
     CHECK_MIOPEN_ERROR(miopenFindConvolutionBackwardWeightsAlgorithm(
       miopen_handle_.handle(),
@@ -143,7 +143,7 @@ public:
                                                   &bwd_inputs_workspace_size_));
 
     u = std::vector<int>{static_cast<int>(bwd_inputs_workspace_size_ / sizeof(float)), 1};
-    bwd_inputs_workspace_ = zeros(u);
+    bwd_inputs_workspace_ = zeros<float>(u);
 
         CHECK_MIOPEN_ERROR(miopenFindConvolutionBackwardDataAlgorithm(
           miopen_handle_.handle(),
@@ -257,10 +257,10 @@ std::tuple<int, int, int, std::string> time_cnn(
 
 
     // Allocate memory for filter
-    auto filter = rand(std::vector<int>{r, s, c, k});
+    auto filter = rand<float>(std::vector<int>{r, s, c, k});
 
     // Allocate memory for input
-    auto input = rand(std::vector<int>{w, h, c, n});
+    auto input = rand<float>(std::vector<int>{w, h, c, n});
     miopenCNN cnn(w, h, c, n, k, r, s, pad_w, pad_h, wstride, hstride, input, filter);
 
     // Allocate memory for output tensor
@@ -283,8 +283,8 @@ std::tuple<int, int, int, std::string> time_cnn(
     int fwd_time = static_cast<int>(std::chrono::duration<double, std::micro>(end - start).count() / num_repeats);
 
     // Allocate memory for backward pass wrt weights
-    auto delta = rand(cnn.get_output_dims());
-    auto dW = zeros(std::vector<int>{r, s, c, k});
+    auto delta = rand<float>(cnn.get_output_dims());
+    auto dW = zeros<float>(std::vector<int>{r, s, c, k});
 
     // Warm up backward
     cnn.backward_params(input, delta, dW);
@@ -303,7 +303,7 @@ std::tuple<int, int, int, std::string> time_cnn(
     int bwd_params_time = static_cast<int>(std::chrono::duration<double, std::micro>(end - start).count() / num_repeats);
 
     //Allocate memory for backward pass wrt inputs
-    auto dX = zeros(std::vector<int>{w, h, c, n});
+    auto dX = zeros<float>(std::vector<int>{w, h, c, n});
 
     //Warm up backward inputs
     cnn.backward_inputs(filter, delta, dX);
@@ -329,7 +329,7 @@ std::tuple<int, int, int, std::string> time_cnn(
 
 int main(int argc, char **argv) {
 
-    int num_repeats = 100;
+    int num_repeats = 300;
 
     hipFree(0);
 
@@ -339,7 +339,7 @@ int main(int argc, char **argv) {
     std::cout << std::setw(30) << "Times" << std::endl;
     std::cout << std::setfill('-') << std::setw(190) << "-" << std::endl;
     std::cout << std::setfill(' ');
-    std::cout << "   w      h      c      n      k      r      s    pad_w  pad_h    stride_w  stride_h    fwd_time (usec)  bwd_inputs_time (usec)  bwd_params_time (usec)  total_time (usec)   fwd_algo " << std::endl;
+    std::cout << "   w      h      c      n      k      f_w      f_h    pad_w  pad_h    stride_w  stride_h    fwd_time (usec)  bwd_inputs_time (usec)  bwd_params_time (usec)  total_time (usec)   fwd_algo " << std::endl;
     std::cout << std::setfill('-') << std::setw(190) << "-" << std::endl;
     std::cout << std::setfill(' ');
 
@@ -347,7 +347,7 @@ int main(int argc, char **argv) {
     for (const auto &problem : training_set) {
 
         // Filter parameters
-        int k, c, r, s;
+        int k, c, r, s; // r - filter_h (f_h), s - filter_w (f_w)
 
         // Input parameters
         int n, w, h;
@@ -371,8 +371,8 @@ int main(int argc, char **argv) {
         std::cout << std::setw(7) << c;
         std::cout << std::setw(7) << n;
         std::cout << std::setw(7) << k;
-        std::cout << std::setw(7) << r;
         std::cout << std::setw(7) << s;
+        std::cout << std::setw(7) << r;
         std::cout << std::setw(7) << pad_w;
         std::cout << std::setw(8) << pad_h;
         std::cout << std::setw(10) << wstride;

@@ -331,7 +331,7 @@ std::tuple<int, int, int, std::string> time_cnn(
 
 int main(int argc, char **argv) {
 
-    int num_repeats = 300;
+    int num_repeats = 100;
     std::string precision ="float";
 
     hipFree(0);

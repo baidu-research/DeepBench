@@ -5,7 +5,6 @@
 #include <vector>
 
 #include <miopen/miopen.h>
-#include <half.hpp>
 
 #include "hip_helper.h"
 
@@ -68,8 +67,6 @@ public:
         miopenDataType_t type;
         if (std::is_same<T, float>::value)
             type = miopenFloat;
-        else if (std::is_same<T, half_float::half>::value)
-            type = miopenHalf;
         else
             throw std::runtime_error("Unknown type");
 
@@ -112,8 +109,6 @@ public:
         miopenDataType_t type;
         if (std::is_same<T, float>::value)
             type = miopenFloat;
-        else if (std::is_same<T, half_float::half>::value)
-            type = miopenHalf;
         else
             throw std::runtime_error("Unknown type");
 
@@ -150,8 +145,6 @@ public:
         miopenDataType_t type;
         if (std::is_same<T, float>::value)
             type = miopenFloat;
-        else if (std::is_same<T, half_float::half>::value)
-            type = miopenHalf;
         else
             throw std::runtime_error("Unknown type");
 
@@ -187,8 +180,6 @@ public:
         miopenDataType_t type;
         if (std::is_same<T, float>::value)
             type = miopenFloat;
-        else if (std::is_same<T, half_float::half>::value)
-            type = miopenHalf;
         else
             throw std::runtime_error("Unknown type");
 

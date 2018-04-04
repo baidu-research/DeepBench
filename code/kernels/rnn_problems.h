@@ -34,7 +34,7 @@ std::vector<std::tuple<int, int, int, std::string>> training_set = {
     std::make_tuple(256, 16, 150, "lstm"),
     std::make_tuple(256, 32, 150, "lstm"),
     std::make_tuple(256, 64, 150, "lstm"),
-    std::make_tuple(2816, 32, 1500, "gru"),
+//  std::make_tuple(2816, 32, 1500, "gru"),
     std::make_tuple(2816, 32, 750, "gru"),
     std::make_tuple(2816, 32, 375, "gru"),
     std::make_tuple(2816, 32, 187, "gru"),

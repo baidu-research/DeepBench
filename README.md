@@ -844,3 +844,40 @@ To compile and run the benchmark, please use the following command:
 make sparse EIGEN_PATH=<path>
 bin/sparse_bench
 ```
+# AMD Benchmarks
+## Compiling
+
+You will need to install AMD's Raden Open Compute [ROCm](https://github.com/RadeonOpenCompute/ROCm) runtime and toolchains, AMD's Machine Intelligence Library [MIOpen](https://github.com/ROCmSoftwarePlatform/MIOpen) and its GEMM library [MIOpenGEMM](https://github.com/ROCmSoftwarePlatform/MIOpenGEMM). Before compiling, export the enviroment variables `CPATH`, `LIBRARY_PATH`, `LD_LIBRARY_PATH` to include these software. An example is:
+
+```
+export CPATH=PATH_TO_MIOPEN/include:PATH_TO_MIOPENGEMM/include/miopengemm:/opt/rocm/include
+export LD_LIBRARY_PATH=PATH_TO_MIOPEN/lib:PATH_TO_MIOPENGEMM/lib:/opt/rocm/lib
+export LIBRARY_PATH=PATH_TO_MIOPEN/lib:PATH_TO_MIOPENGEMM/lib:/opt/rocm/lib
+```
+
+The `Makefile` in `code/amd` is for GFX900 GPU. To benchmark other processors, you will need to modify the `Makefile`. 
+To compile the convolution, recurrent and GEMM benchmarks, run:
+
+```
+make conv rnn gemm
+```
+
+## Running the Benchmarks
+After successful compilation, the executables will be generated in the `bin` directory
+
+To benchmark convolutions:
+```
+bin/conv_bench
+```
+
+To benchmark RNN:
+```
+bin/rnn_bench
+```
+
+To benchmark GEMM:
+```
+bin/gemm_bench
+```
+
+

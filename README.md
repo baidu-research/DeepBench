@@ -849,7 +849,7 @@ bin/sparse_bench
 
 ## Prerequisites
 * A ROCm enabled platform, more info [here](https://rocm.github.io/install.html).
-* [MIOpen](https://github.com/ROCmSoftwarePlatform/MIOpen)
+* [MIOpen](https://github.com/ROCmSoftwarePlatform/MIOpen) - HIP backend of MIOpen is required.
 * [rocBLAS](https://github.com/ROCmSoftwarePlatform/rocBLAS)
 
 At present only `fp32 train` benchmarks are enabled.

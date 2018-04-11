@@ -1,4 +1,4 @@
-all: gemm_cblas gemm conv sparse
+all: gemm_cblas gemm_armcl gemm conv sparse
 
 BIN_DIR?=bin
 EIGEN_PATH?=/usr/local/eigen
@@ -19,6 +19,10 @@ KERNELS_DIR=../kernels/
 gemm_cblas: cblas_bench.cpp
 	$(MKDIR) $(BIN_DIR)
 	g++-7 -O3 -fopenmp --std=c++11 -I $(KERNELS_DIR) -I $(ARMPL_INCLUDE_PATH) -L $(ARMPL_LIB_PATH) -o bin/gemm_cblas_bench $< -larmpl -lgfortran
+
+gemm_armcl: armcl_bench.cpp 
+	$(MKDIR) $(BIN_DIR)
+	g++ -O3 -std=c++11  -I $(ARM_COMPUTE_INCLUDE_PATH) -I $(ARM_COMPUTE_LIB_PATH) -I $(KERNELS_DIR) -L $(ARM_COMPUTE_LIB) $< -o bin/gemm_armcl_bench -larm_compute_core -larm_compute
 
 gemm: gemm_bench.cc
 	$(MKDIR) $(BIN_DIR)

@@ -34,7 +34,7 @@
 #include <armpl.h>
 #include "gemm_problems.h"
 
-#define FIX_LD(x)   (((((x) + 127)/128)*128) + 16)
+#define FIX_LD(x) x
 
 #define A_TYPE float
 #define B_TYPE float
@@ -213,7 +213,7 @@ int main(int argc, char *argv[])
     sizec = p_gemm_params[i].ldc * p_gemm_params[i].n;
 
     max_sizea = std::max(sizea, max_sizea);
-    max_sizeb = std::max(sizea, max_sizeb);
+    max_sizeb = std::max(sizeb, max_sizeb);
     max_sizec = std::max(sizec, max_sizec);
 
     max_m     = std::max(p_gemm_params[i].m, max_m);

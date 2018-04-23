@@ -31,7 +31,12 @@
 #include <sstream>
 #include <iostream>
 
+#ifdef USE_ARMPL
 #include <armpl.h>
+#elif defined(USE_OPENBLAS)
+#include <cblas.h>
+#endif
+
 #include "gemm_problems.h"
 
 #define FIX_LD(x) x
@@ -77,7 +82,7 @@ int main(int argc, char *argv[])
   B_TYPE  *B;
   C_TYPE  *C, co = 0;
   float  alpha = 1.0, beta = 1.0;
-  double flops, total_flops = 0., st_time, end_time, ave_time, total_time = 0.;
+  double flops, total_flops = 0., ave_time, total_time = 0.;
   // DEFAULT settings
   int REPEAT = 10;
   // Default matrix test size if we are doing a single test
@@ -239,17 +244,17 @@ int main(int argc, char *argv[])
         alpha, A, p_gemm_params[i].lda, B, p_gemm_params[i].ldb, beta, C, p_gemm_params[i].ldc);
     
     // Start measurment
-    st_time = dsecnd_();
+    auto st_time = std::chrono::steady_clock::now();
     for (j = 0; j < REPEAT; ++j) {
       cblas_sgemm(CblasColMajor, p_gemm_params[i].transa, p_gemm_params[i].transb, p_gemm_params[i].m, p_gemm_params[i].n, p_gemm_params[i].k, 
           alpha, A, p_gemm_params[i].lda, B, p_gemm_params[i].ldb, beta, C, p_gemm_params[i].ldc);
     }
-    end_time = dsecnd_();
+    auto end_time = std::chrono::steady_clock::now();
 
     flops = 2.*p_gemm_params[i].m*p_gemm_params[i].n*p_gemm_params[i].k;
     total_flops += flops;
 
-    ave_time     = 1E6*(end_time - st_time)/REPEAT;
+    ave_time     = std::chrono::duration<double, std::micro>(end_time - st_time).count() / REPEAT;
     total_time  += ave_time;
 
     printf("SGEMM,%s,%s,%d,%d,%d,%.1f,%.5f\n",

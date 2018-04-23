@@ -1,4 +1,4 @@
-all: gemm_cblas gemm_armcl gemm conv sparse
+all: gemm_armpl gemm_oblas gemm_armcl gemm conv sparse
 
 BIN_DIR?=bin
 EIGEN_PATH?=/usr/local/eigen
@@ -14,11 +14,20 @@ GEMMLOWP_PATH=$(GEMMLOWP_INCLUDE_PATH)/../
 ARMPL_PATH?=/usr/local/armpl/
 ARMPL_INCLUDE_PATH=$(ARMPL_PATH)/include/
 ARMPL_LIB_PATH=$(ARMPL_PATH)/lib/
+
+OPENBLAS_PATH?=/usr/local/openblas/
+OPENBLAS_INCLUDE_PATH=$(OPENBLAS_PATH)/include/
+OPENBLAS_LIB_PATH=$(OPENBLAS_PATH)/lib/
+
 KERNELS_DIR=../kernels/
 
-gemm_cblas: cblas_bench.cpp
+gemm_armpl: cblas_bench.cpp
 	$(MKDIR) $(BIN_DIR)
-	g++-7 -O3 -fopenmp --std=c++11 -I $(KERNELS_DIR) -I $(ARMPL_INCLUDE_PATH) -L $(ARMPL_LIB_PATH) -o bin/gemm_cblas_bench $< -larmpl -lgfortran
+	g++ -O3 -fopenmp --std=c++11 -I $(KERNELS_DIR) -I $(ARMPL_INCLUDE_PATH) -L $(ARMPL_LIB_PATH) -DUSE_ARMPL -o bin/gemm_armpl_bench $< -larmpl_mp -lgfortran
+
+gemm_oblas: cblas_bench.cpp
+	$(MKDIR) $(BIN_DIR)
+	g++ -O3 -fopenmp --std=c++11 -I $(KERNELS_DIR) -I $(OPENBLAS_INCLUDE_PATH) -L $(OPENBLAS_LIB_PATH) -DUSE_OPENBLAS -o bin/gemm_oblas_bench $< -lopenblas
 
 gemm_armcl: armcl_bench.cpp 
 	$(MKDIR) $(BIN_DIR)

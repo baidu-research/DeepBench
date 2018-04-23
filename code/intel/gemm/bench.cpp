@@ -30,7 +30,12 @@
 #include <cstdint>
 #include <sstream>
 
+#ifndef USE_OPENBLAS
 #include <mkl.h>
+#else
+#include <cblas.h>
+#endif
+
 #include "gemm_problems.h"
 
 #define FIX_LD(x)   (((((x) + 127)/128)*128) + 16)
@@ -53,8 +58,13 @@
 typedef struct gemm_params {
     bool ta;
     bool tb;
+#ifdef USE_OPENBLAS
+    CBLAS_TRANSPOSE transa;
+    CBLAS_TRANSPOSE transb;
+#else
     char transa;
     char transb;
+#endif
     int m;
     int n;
     int k;
@@ -87,7 +97,7 @@ int main(int argc, char *argv[])
   B_TYPE  *B;
   C_TYPE  *C, co = 0;
   float  alpha = 1.0, beta = 1.0;
-  double flops, total_flops = 0., st_time, end_time, ave_time, total_time = 0.;
+  double flops, total_flops = 0., ave_time, total_time = 0.;
 #ifdef PACKED_API
   float *AP, *BP;
 #endif
@@ -197,7 +207,7 @@ int main(int argc, char *argv[])
   }
 
   num_gemms = p_problem_set->size();
-  gemm_params_t* p_gemm_params = (gemm_params_t*) mkl_malloc(num_gemms*sizeof(gemm_params_t), 64);
+  gemm_params_t* p_gemm_params = (gemm_params_t*) malloc(num_gemms*sizeof(gemm_params_t));
 
   i = 0;
   for (const auto &problem : *p_problem_set) {
@@ -207,21 +217,37 @@ int main(int argc, char *argv[])
     if (p_gemm_params[i].ta) {
       p_gemm_params[i].lda = FIX_LD(p_gemm_params[i].k);
       sizea = p_gemm_params[i].lda * p_gemm_params[i].m;
+#ifdef USE_OPENBLAS
+      p_gemm_params[i].transa = CblasTrans;
+#else
       p_gemm_params[i].transa = 'T';
+#endif
     } else {
       p_gemm_params[i].lda = FIX_LD(p_gemm_params[i].m);
       sizea = p_gemm_params[i].lda * p_gemm_params[i].k;
+#ifdef USE_OPENBLAS
+      p_gemm_params[i].transa = CblasNoTrans;
+#else
       p_gemm_params[i].transa = 'N';
+#endif
     }
 
     if (p_gemm_params[i].tb) {
       p_gemm_params[i].ldb = FIX_LD(p_gemm_params[i].n);
       sizeb = p_gemm_params[i].ldb * p_gemm_params[i].k;
+#ifdef USE_OPENBLAS
+      p_gemm_params[i].transb = CblasTrans;
+#else
       p_gemm_params[i].transb = 'T';
+#endif
     } else {
       p_gemm_params[i].ldb = FIX_LD(p_gemm_params[i].k);
       sizeb = p_gemm_params[i].ldb * p_gemm_params[i].n;
+#ifdef USE_OPENBLAS
+      p_gemm_params[i].transb = CblasNoTrans;
+#else
       p_gemm_params[i].transb = 'N';
+#endif
     }
 
     p_gemm_params[i].ldc = FIX_LD(p_gemm_params[i].m);
@@ -239,12 +265,17 @@ int main(int argc, char *argv[])
 
   assert(i == num_gemms);
 
+#ifdef USE_OPENBLAS
+  A = (A_TYPE*) malloc(sizeof(A_TYPE)*max_sizea);
+  B = (B_TYPE*) malloc(sizeof(B_TYPE)*max_sizeb);
+  C = (C_TYPE*) malloc(sizeof(C_TYPE)*max_sizec);
+#elif defined(PACKED_API)
+  AP = sgemm_alloc("A", &max_m, &max_n, &max_k);
+  BP = sgemm_alloc("B", &max_m, &max_n, &max_k);
+#else
   A = (A_TYPE*) mkl_malloc(sizeof(A_TYPE)*max_sizea, MKL_MEM_ALIGNMENT);
   B = (B_TYPE*) mkl_malloc(sizeof(B_TYPE)*max_sizeb, MKL_MEM_ALIGNMENT);
   C = (C_TYPE*) mkl_malloc(sizeof(C_TYPE)*max_sizec, MKL_MEM_ALIGNMENT);
-#ifdef PACKED_API
-  AP = sgemm_alloc("A", &max_m, &max_n, &max_k);
-  BP = sgemm_alloc("B", &max_m, &max_n, &max_k);
 #endif
 
 #ifdef IGEMM_S8U8S32
@@ -268,7 +299,8 @@ int main(int argc, char *argv[])
     // warmup
     sgemm_compute("P", "P", &p_gemm_params[i].m, &p_gemm_params[i].n, &p_gemm_params[i].k, 
             AP, &p_gemm_params[i].lda, BP, &p_gemm_params[i].ldb, &beta, C, &p_gemm_params[i].ldc);
-    st_time = dsecnd();
+
+    auto st_time = std::chrono::steady_clock::now();
     for (j = 0; j < REPEAT; ++j) {
       sgemm_compute("P", "P", &p_gemm_params[i].m, &p_gemm_params[i].n, &p_gemm_params[i].k, 
           AP, &p_gemm_params[i].lda, BP, &p_gemm_params[i].ldb, &beta, C, &p_gemm_params[i].ldc);
@@ -278,28 +310,36 @@ int main(int argc, char *argv[])
 #ifdef IGEMM_S8U8S32
     gemm_s8u8s32(&p_gemm_params[i].transa, &p_gemm_params[i].transb, "F", &p_gemm_params[i].m, &p_gemm_params[i].n, &p_gemm_params[i].k, 
         &alpha, A, &p_gemm_params[i].lda, &ao, B, &p_gemm_params[i].ldb, &bo, &beta, C, &p_gemm_params[i].ldc, &co);
+#elif defined(USE_OPENBLAS)
+   cblas_sgemm(CblasColMajor, p_gemm_params[i].transa, p_gemm_params[i].transb, 
+               p_gemm_params[i].m, p_gemm_params[i].n, p_gemm_params[i].k, alpha, 
+	       A, p_gemm_params[i].lda, B, p_gemm_params[i].ldb, beta, C, p_gemm_params[i].ldc);
 #else
     sgemm(&p_gemm_params[i].transa, &p_gemm_params[i].transb, &p_gemm_params[i].m, &p_gemm_params[i].n, &p_gemm_params[i].k, 
         &alpha, A, &p_gemm_params[i].lda, B, &p_gemm_params[i].ldb, &beta, C, &p_gemm_params[i].ldc);
 #endif
     // time measurements
-    st_time = dsecnd();
+    auto st_time = std::chrono::steady_clock::now();
     for (j = 0; j < REPEAT; ++j) {
 #ifdef IGEMM_S8U8S32
       gemm_s8u8s32(&p_gemm_params[i].transa, &p_gemm_params[i].transb, "F", &p_gemm_params[i].m, &p_gemm_params[i].n, &p_gemm_params[i].k, 
           &alpha, A, &p_gemm_params[i].lda, &ao, B, &p_gemm_params[i].ldb, &bo, &beta, C, &p_gemm_params[i].ldc, &co);
+#elif defined(USE_OPENBLAS)
+      cblas_sgemm(CblasColMajor, p_gemm_params[i].transa, p_gemm_params[i].transb, 
+                  p_gemm_params[i].m, p_gemm_params[i].n, p_gemm_params[i].k, alpha, 
+                  A, p_gemm_params[i].lda, B, p_gemm_params[i].ldb, beta, C, p_gemm_params[i].ldc);
 #else
       sgemm(&p_gemm_params[i].transa, &p_gemm_params[i].transb, &p_gemm_params[i].m, &p_gemm_params[i].n, &p_gemm_params[i].k, 
           &alpha, A, &p_gemm_params[i].lda, B, &p_gemm_params[i].ldb, &beta, C, &p_gemm_params[i].ldc);
 #endif
     }
 #endif
-    end_time = dsecnd();
+    auto end_time = std::chrono::steady_clock::now();
 
     flops = 2.*p_gemm_params[i].m*p_gemm_params[i].n*p_gemm_params[i].k;
     total_flops += flops;
 
-    ave_time     = 1E6*(end_time - st_time)/REPEAT;
+    ave_time     = std::chrono::duration<double, std::micro>(end_time - st_time).count() /REPEAT;
     total_time  += ave_time;
 
 #ifdef IGEMM_S8U8S32
@@ -315,12 +355,17 @@ int main(int argc, char *argv[])
 #endif
   }
 
+#ifdef USE_OPENBLAS
+  free(A);
+  free(B);
+  free(C);
+#elif defined(PACKED_API)
+  sgemm_free(AP);
+  sgemm_free(BP);
+#else
   mkl_free(A);
   mkl_free(B);
   mkl_free(C);
-#ifdef PACKED_API
-  sgemm_free(AP);
-  sgemm_free(BP);
 #endif
 
 #ifdef IGEMM_S8U8S32

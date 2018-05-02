@@ -844,3 +844,49 @@ To compile and run the benchmark, please use the following command:
 make sparse EIGEN_PATH=<path>
 bin/sparse_bench
 ```
+
+# AMD Benchmarks
+
+## Prerequisites
+* A ROCm enabled platform, more info [here](https://rocm.github.io/install.html).
+* [MIOpen](https://github.com/ROCmSoftwarePlatform/MIOpen) - HIP backend of MIOpen is required.
+* [rocBLAS](https://github.com/ROCmSoftwarePlatform/rocBLAS)
+
+At present only `fp32 train` benchmarks are enabled.
+
+## Compiling
+
+The `Makefile` in `code/amd` is for an AMD `gfx900` GPU. To benchmark other generations, please modify the `Makefile` accordingly.
+
+Setting your enviroment variables before compiling/running:
+
+```
+export PATH=PATH_TO_ROCM/bin:$PATH
+export CPATH=PATH_TO_MIOPEN/include:$CPATH
+export LIBRARY_PATH=PATH_TO_MIOPEN/lib:$LIBRARY_PATH
+export LD_LIBRARY_PATH=PATH_TO_MIOPEN/lib:PATH_TO_MIOPENGEMM/lib:$LD_LIBRARY_PATH
+```
+
+To compile the convolution, RNNs and GEMM benchmarks, run:
+
+```
+make conv rnn gemm
+```
+
+## Running the Benchmarks
+After successful compilation, the executables will be generated in the `bin` directory.
+
+To benchmark convolutions:
+```
+bin/conv_bench
+```
+
+To benchmark RNN:
+```
+bin/rnn_bench
+```
+
+To benchmark GEMM:
+```
+bin/gemm_bench
+```

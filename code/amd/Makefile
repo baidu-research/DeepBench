@@ -3,7 +3,7 @@ BIN_DIR?=bin
 MKDIR=mkdir -p
 
 #hipcc
-HIPCC=hipcc
+HIPCC=/opt/rocm/bin/hipcc
 
 #BLAS
 ROCBLAS_LIB=rocblas

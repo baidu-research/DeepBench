@@ -858,6 +858,15 @@ At present only `fp32 train` benchmarks are enabled.
 
 The `Makefile` in `code/amd` is for an AMD `gfx900` GPU. To benchmark other generations, please modify the `Makefile` accordingly.
 
+Setting your enviroment variables before compiling/running:
+
+```
+export PATH=PATH_TO_ROCM/bin:$PATH
+export CPATH=PATH_TO_MIOPEN/include:$CPATH
+export LIBRARY_PATH=PATH_TO_MIOPEN/lib:$LIBRARY_PATH
+export LD_LIBRARY_PATH=PATH_TO_MIOPEN/lib:PATH_TO_MIOPENGEMM/lib:$LD_LIBRARY_PATH
+```
+
 To compile the convolution, RNNs and GEMM benchmarks, run:
 
 ```

@@ -125,7 +125,7 @@ int main(int argc, char *argv[])
     sizec = p_gemm_params[i].ldc * p_gemm_params[i].n;
 
     max_sizea = std::max(sizea, max_sizea);
-    max_sizeb = std::max(sizea, max_sizeb);
+    max_sizeb = std::max(sizeb, max_sizeb);
     max_sizec = std::max(sizec, max_sizec);
 
     max_m     = std::max(p_gemm_params[i].m, max_m);

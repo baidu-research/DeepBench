@@ -480,10 +480,10 @@ The recurrent op kernels are only run on NVIDIA hardware.
 
 | Hidden Units   | Batch Size   | TimeSteps   | Recurrent Type   | Application           | Total Time (ms) | Fwd TeraFLOPS   | Processor       |
 | -------------- | ------------ | ----------- | ---------------- | --------------------- | ------------    | --------------- | --------------- |
-| 1760           | 16           | 50          | Vanilla          | Speech Recognition    | 6.75            | 1.46            | Tesla V100 FP32 |
-| 2560           | 32           | 50          | Vanilla          | Speech Recognition    | 11.48           | 3.43            | Tesla V100 Mixed Precision |
-| 1024           | 128          | 25          | LSTM             | Machine Translation   | 6.46            | 12.41           | Tesla V100 Mixed Precision |
-| 2816           | 32           | 1500        | GRU              | Speech Recognition    | 591.02          | 10.45           | Tesla V100 Mixed Precision |
+| 1760           | 16           | 50          | Vanilla          | Speech Recognition    | 8.21            | 1.19            | Tesla V100 Mixed Precision |
+| 2560           | 32           | 50          | Vanilla          | Speech Recognition    | 10.50           | 4.08            | Tesla V100 Mixed Precision |
+| 1024           | 128          | 25          | LSTM             | Machine Translation   | 5.56            | 10.91           | Tesla V100 Mixed Precision |
+| 2816           | 32           | 1500        | GRU              | Speech Recognition    | 380.04          | 11.85           | Tesla V100 Mixed Precision |
 
 ### All-Reduce Results
 

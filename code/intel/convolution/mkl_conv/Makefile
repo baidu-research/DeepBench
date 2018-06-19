@@ -30,10 +30,10 @@ ifeq ($(MKLLIB), mklml_intel)
     EXTRALIB = -L$(MKLROOT)/lib -lmklml_intel
 endif
 ifeq ($(MKLLIB), mkl_rt)
-    EXTRALIB = -L$(MKLROOT)/lib -lmkl_rt \
+    EXTRALIB = -L$(MKLROOT)/lib/intel64/ -lmkl_rt \
 			   -Wl,-rpath,$(MKLROOT)/lib/intel64
 endif
-EXTRALIB += -L$(MKLROOT)/lib -liomp5 -lpthread -lm -ldl
+EXTRALIB += -L$(MKLROOT)/lib/intel64/ -liomp5 -lpthread -lm -ldl
 endif
 
 ifeq ($(CONVLIB),MKLDNN)

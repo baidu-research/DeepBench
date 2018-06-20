@@ -53,7 +53,7 @@ OPTFLAGS = -O3
 endif
 
 CXX      = icpc
-CXXFLAGS = -Wall -std=c++11 $(OPTFLAGS) $(EXTRACXXFLAGS) -fopenmp -I../../../kernelss
+CXXFLAGS = -Wall -std=c++11 $(OPTFLAGS) $(EXTRACXXFLAGS) -fopenmp -I../../../kernels
 LFLAGS   = -lrt
 OBJS     = std_conv_bench.o
 

@@ -5,6 +5,9 @@ MKDIR=mkdir -p
 #hipcc
 HIPCC=/opt/rocm/bin/hipcc
 
+#ROCm include directory
+ROCM_INCLUDE=/opt/rocm/include
+
 #BLAS
 ROCBLAS_LIB=rocblas
 
@@ -21,15 +24,15 @@ OPT=-O3
 
 conv:
 	$(MKDIR) $(BIN_DIR)
-	$(HIPCC) ${SOURCE_DIR}/conv_bench_rocm.cpp -o $(BIN_DIR)/conv_bench -I$(DEEPBENCH_INC) -l$(MIOPEN_LIB) $(OPT) -std=c++11 --amdgpu-target=gfx900
+	$(HIPCC) ${SOURCE_DIR}/conv_bench_rocm.cpp -o $(BIN_DIR)/conv_bench -I$(DEEPBENCH_INC) -I$(ROCM_INCLUDE) -l$(MIOPEN_LIB) $(OPT) -std=c++11 --amdgpu-target=gfx900
 
 rnn:
 	$(MKDIR) $(BIN_DIR)
-	$(HIPCC) ${SOURCE_DIR}/rnn_bench_rocm.cpp -o $(BIN_DIR)/rnn_bench -I$(DEEPBENCH_INC) -l$(MIOPEN_LIB) $(OPT) -std=c++11 --amdgpu-target=gfx900
+	$(HIPCC) ${SOURCE_DIR}/rnn_bench_rocm.cpp -o $(BIN_DIR)/rnn_bench -I$(DEEPBENCH_INC) -I$(ROCM_INCLUDE) -l$(MIOPEN_LIB) $(OPT) -std=c++11 --amdgpu-target=gfx900
 
 gemm:
 	$(MKDIR) $(BIN_DIR)
-	$(HIPCC) ${SOURCE_DIR}/gemm_bench.cpp -o $(BIN_DIR)/gemm_bench -I$(DEEPBENCH_INC) -l$(ROCBLAS_LIB) $(OPT) -std=c++11 --amdgpu-target=gfx900
+	$(HIPCC) ${SOURCE_DIR}/gemm_bench.cpp -o $(BIN_DIR)/gemm_bench -I$(DEEPBENCH_INC) -I$(ROCM_INCLUDE) -l$(ROCBLAS_LIB) $(OPT) -std=c++11 --amdgpu-target=gfx900
 
 clean:
 	rm -rf $(BIN_DIR)

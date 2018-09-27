@@ -862,7 +862,7 @@ Setting your enviroment variables before compiling/running:
 
 ```
 export PATH=PATH_TO_ROCM/bin:$PATH
-export CPATH=PATH_TO_MIOPEN/include:$CPATH
+export CPATH=PATH_TO_MIOPEN/include:PATH_TO_ROCBLAS/include:$CPATH
 export LIBRARY_PATH=PATH_TO_MIOPEN/lib:$LIBRARY_PATH
 export LD_LIBRARY_PATH=PATH_TO_MIOPEN/lib:PATH_TO_MIOPENGEMM/lib:$LD_LIBRARY_PATH
 ```

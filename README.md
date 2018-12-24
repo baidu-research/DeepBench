@@ -585,12 +585,13 @@ MPI_PATH: Path to MPI library. The benchmarks have been tested with OpenMPI vers
 CUDA_PATH: Path to CUDA library. The benchmarks have been tested with version 7.5.18.
 CUDNN_PATH: Path to CUDNN library. The benchmarks have been tested with version 5.0.
 NCCL_PATH: Path to NCCL library. NCCL library is available at https://github.com/NVIDIA/nccl. The benchmarks have been tested with commit b3a9e1333d9e2e1b8553b5843ba1ba4f7c79739d
+BAIDU_ALLREDUCE_PATH: Path to Baidu's allreduce implementation, which is avaiable at https://github.com/baidu-research/baidu-allreduce/.
 ```
 
 To build all the benchmarks, please use the following command:
 ```
 cd code/
-make CUDA_PATH=<cuda_path> CUDNN_PATH=<cudnn_path> MPI_PATH=<mpi_path> NCCL_PATH=<nccl_path>
+make CUDA_PATH=<cuda_path> CUDNN_PATH=<cudnn_path> MPI_PATH=<mpi_path> NCCL_PATH=<nccl_path> BAIDU_ALLREDUCE_PATH=<baidu_allreduce_path>
 ```
 
 For distributions that split their MPI headers and libraries (e.g. RHEL, Fedora, CentOS) into separate directories you should also specify the path to the include files:

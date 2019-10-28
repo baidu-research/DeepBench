@@ -102,12 +102,25 @@ public:
         int out_h, out_w, out_c, out_n;
 
         cudnnTensorFormat_t format;
+
+        int capability = get_compute_capability();
+
+#if (CUDNN_MAJOR >= 7) && (USE_TENSOR_CORES)
+        if (std::is_same<T1, uint8_t>::value) {
+            format = (capability >= 75) ? CUDNN_TENSOR_NCHW_VECT_C : CUDNN_TENSOR_NHWC;
+        } else if (std::is_same<T1, uint16_t>::value) {
+            format = CUDNN_TENSOR_NHWC;
+        } else {
+            format = CUDNN_TENSOR_NCHW;
+        }
+#else
         // For int8 inference, the supported format is NHWC
         if (std::is_same<T1, uint8_t>::value) {
             format = CUDNN_TENSOR_NHWC;
         } else {
             format = CUDNN_TENSOR_NCHW;
         }
+#endif
 
         x_desc_ = TensorDescriptor4d<T1>(format, n, c, h, w);
         w_desc_ = FilterDescriptor4d<T1>(format, k, c, r, s);
@@ -526,12 +539,13 @@ int main(int argc, char **argv) {
         bool need_padding = false;
 
 #if CUDNN_MAJOR >= 6
-        int padded_c, padded_w, padded_h;
+        int padded_c, padded_w, padded_h, padded_k;
         int pad_value;
 
         padded_c = c;
         padded_h = h;
         padded_w = w;
+        padded_k = k;
 
         if (precision == "int8") {
             pad_value = 4;
@@ -548,13 +562,14 @@ int main(int argc, char **argv) {
             }
         }
 #if (USE_TENSOR_CORES)
-        // Tensor cores need channels to be a multiple of 8. So, added padding for some kernels.
-        if (!inference) {
-            pad_value = 8;
-            if (c % pad_value) {
+        if (precision == "half" || precision == "int8") {
+            // Tensor cores need channels to be a multiple of 8. So, added padding for some kernels.
+            pad_value = (precision == "half") ? 8 : 32;
+            if (c % pad_value || k % pad_value) {
                 pad_kernels_count++;
                 if (PAD_KERNELS) {
                     pad_dim(padded_c, pad_value);
+                    pad_dim(padded_k, pad_value);
                     need_padding = true;
                 } else {
                     skip_kernel = true;
@@ -575,12 +590,17 @@ int main(int argc, char **argv) {
             std::tie(fwd_time, bwd_inputs_time, bwd_params_time, fwd_algo_s) =
                 time_cnn<float, float>(k, padded_c, r, s, n, padded_h, padded_w, pad_h, pad_w, hstride, wstride, num_repeats, curand_gen, inference);
         } else if (precision == "half") {
-            std::tie(fwd_time, bwd_inputs_time, bwd_params_time, fwd_algo_s) =
-                time_cnn<uint16_t, uint16_t>(k, padded_c, r, s, n, padded_h, padded_w, pad_h, pad_w, hstride, wstride, num_repeats, curand_gen, inference);
+            if (!inference) {
+                std::tie(fwd_time, bwd_inputs_time, bwd_params_time, fwd_algo_s) =
+                    time_cnn<uint16_t, uint32_t>(padded_k, padded_c, r, s, n, padded_h, padded_w, pad_h, pad_w, hstride, wstride, num_repeats, curand_gen, inference);
+            } else {
+                std::tie(fwd_time, bwd_inputs_time, bwd_params_time, fwd_algo_s) =
+                    time_cnn<uint16_t, uint16_t>(padded_k, padded_c, r, s, n, padded_h, padded_w, pad_h, pad_w, hstride, wstride, num_repeats, curand_gen, inference);
+            }
         } else if ((precision == "int8") && inference) {
             if (!skip_kernel) {
                 std::tie(fwd_time, bwd_inputs_time, bwd_params_time, fwd_algo_s) =
-                    time_cnn<uint8_t, int>(k, padded_c, r, s, n, padded_h, padded_w, pad_h, pad_w, hstride, wstride, num_repeats, curand_gen, inference);
+                    time_cnn<uint8_t, int>(padded_k, padded_c, r, s, n, padded_h, padded_w, pad_h, pad_w, hstride, wstride, num_repeats, curand_gen, inference);
             }
         } else {
             throw std::runtime_error(ss.str());

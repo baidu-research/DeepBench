@@ -7,6 +7,12 @@
 
 #include <cudnn.h>
 
+int get_compute_capability() {
+    cudaDeviceProp prop;
+    cudaGetDeviceProperties(&prop, 0);
+    return prop.major * 10 + prop.minor;
+}
+
 void throw_cudnn_err(cudnnStatus_t status, int line, const char* filename) {
     if (status != CUDNN_STATUS_SUCCESS) {
         std::stringstream ss;
@@ -184,7 +190,11 @@ public:
             type = CUDNN_DATA_FLOAT;
 #if CUDNN_MAJOR >= 6
         } else if (std::is_same<T, uint8_t>::value) {
+#if (CUDNN_MAJOR >= 7) && (USE_TENSOR_CORES)
+            type = (get_compute_capability() >= 75) ? CUDNN_DATA_INT8x32 : CUDNN_DATA_INT8;
+#else
             type = CUDNN_DATA_INT8;
+#endif
 #endif
         } else if (std::is_same<T, uint16_t>::value) {
             type = CUDNN_DATA_HALF;
@@ -230,7 +240,11 @@ public:
             type = CUDNN_DATA_FLOAT;
 #if CUDNN_MAJOR >= 6
         } else if (std::is_same<T, uint8_t>::value) {
+#if (CUDNN_MAJOR >= 7) && (USE_TENSOR_CORES)
+            type = (get_compute_capability() >= 75) ? CUDNN_DATA_INT8x32 : CUDNN_DATA_INT8;
+#else
             type = CUDNN_DATA_INT8;
+#endif
 #endif
         } else if (std::is_same<T, uint16_t>::value) {
             type = CUDNN_DATA_HALF;
@@ -274,12 +288,16 @@ public:
             type = CUDNN_DATA_INT8;
         } else if (std::is_same<T, uint16_t>::value) {
             type = CUDNN_DATA_HALF;
+        } else if (std::is_same<T, uint32_t>::value) {
+            type = CUDNN_DATA_FLOAT;
         } else if (std::is_same<T, int>::value) {
             type = CUDNN_DATA_INT32;
         } else {
             throw std::runtime_error("Unknown type in ConvolutionDescriptor");
         }
 
+        cudnnConvolutionMode_t mode = (std::is_same<T, uint32_t>::value) ?
+            CUDNN_CROSS_CORRELATION : CUDNN_CONVOLUTION;
 
         CHECK_CUDNN_ERROR(cudnnSetConvolution2dDescriptor(*desc_,
                                                           pad_h,
@@ -288,7 +306,7 @@ public:
                                                           wstride,
                                                           1,
                                                           1,
-                                                          CUDNN_CONVOLUTION,
+                                                          mode,
                                                           type));
 #else
         CHECK_CUDNN_ERROR(cudnnSetConvolution2dDescriptor(*desc_,
@@ -298,7 +316,7 @@ public:
                                                           wstride,
                                                           1,
                                                           1,
-                                                          CUDNN_CONVOLUTION));
+                                                          mode));
 
 #endif
 

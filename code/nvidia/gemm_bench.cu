@@ -257,8 +257,54 @@ int main(int argc, char **argv) {
 
 
 #if (__CUDACC_VER_MAJOR__ >= 8)
-        int pad_m;
+        int pad_m, pad_n, pad_k;
         pad_m = m;
+        pad_n = n;
+        pad_k = k;
+
+#if (USE_TENSOR_CORES)
+        if (precision == "half") {
+            /*
+            To use Tensor core, pad the dimensions following the restrictions:
+            https://docs.nvidia.com/cuda/cublas/index.html#tensorop-restrictions
+            */
+            if (!a_t && !b_t || a_t && !b_t) {
+                if (pad_m % 8 || pad_k % 8) {
+                    pad_kernels_count ++;
+                    if (PAD_KERNELS) {
+                        pad_dim(pad_m, 8);
+                        pad_dim(pad_k, 8);
+                        need_padding = true;
+                    } else {
+                        skip_kernel = true;
+                    }
+                }
+            } else if (!a_t && b_t) {
+                if (pad_m % 8 || pad_n % 8) {
+                    pad_kernels_count ++;
+                    if (PAD_KERNELS) {
+                        pad_dim(pad_m, 8);
+                        pad_dim(pad_n, 8);
+                        need_padding = true;
+                    } else {
+                        skip_kernel = true;
+                    }
+                }
+            } else {
+                if (pad_m % 8 || pad_n % 8 || pad_k % 8) {
+                    pad_kernels_count ++;
+                    if (PAD_KERNELS) {
+                        pad_dim(pad_m, 8);
+                        pad_dim(pad_n, 8);
+                        pad_dim(pad_k, 8);
+                        need_padding = true;
+                    } else {
+                        skip_kernel = true;
+                    }
+                }
+            }
+        }
+#endif
         if (precision == "int8") {
             if (pad_m%4) {
                 pad_kernels_count++;
@@ -290,9 +336,9 @@ int main(int argc, char **argv) {
             if (!skip_kernel)
                 time_ms = time_gemm<uint8_t, int>(a, b, c, a_t, b_t, cublas_handle);
         } else if (precision == "half") {
-            auto a = rand<uint16_t>({a_t ? k : m, a_t ? m : k}, curand_gen);
-            auto b = rand<uint16_t>({b_t ? n : k, b_t ? k : n}, curand_gen);
-            auto c = zeros<uint16_t>({m, n});
+            auto a = rand<uint16_t>({a_t ? pad_k : pad_m, a_t ? pad_m : pad_k}, curand_gen);
+            auto b = rand<uint16_t>({b_t ? pad_n : pad_k, b_t ? pad_k : pad_n}, curand_gen);
+            auto c = zeros<uint16_t>({pad_m, pad_n});
             std::cout << std::setw(13) << precision;
             time_ms = time_gemm<uint16_t, uint16_t>(a, b, c, a_t, b_t, cublas_handle);
         } else if (precision == "float") {

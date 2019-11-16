@@ -14,6 +14,8 @@ MIOPEN_LIB?=MIOpen
 
 #DeepBench
 DEEPBENCH_INC=${SOURCE_DIR}/../kernels
+# rocBLAS
+ROCBLAS_INC=$(ROCM)/rocblas/include
 
 all: conv rnn gemm 
 
@@ -30,7 +32,7 @@ rnn:
 
 gemm:
 	$(MKDIR) $(BIN_DIR)
-	$(HIPCC) ${SOURCE_DIR}/gemm_bench.cpp -o $(BIN_DIR)/gemm_bench -I$(DEEPBENCH_INC) -l$(ROCBLAS_LIB) $(OPT) -std=c++11 --amdgpu-target=gfx900
+	$(HIPCC) ${SOURCE_DIR}/gemm_bench.cpp -o $(BIN_DIR)/gemm_bench -I$(DEEPBENCH_INC) -I$(ROCBLAS_INC) -l$(ROCBLAS_LIB) $(OPT) -std=c++11 --amdgpu-target=gfx900
 
 clean:
 	rm -rf $(BIN_DIR)

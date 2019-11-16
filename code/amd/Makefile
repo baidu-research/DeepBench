@@ -2,8 +2,9 @@ SOURCE_DIR?=.
 BIN_DIR?=bin
 MKDIR=mkdir -p
 
+ROCM=/opt/rocm
 #hipcc
-HIPCC=/opt/rocm/bin/hipcc
+HIPCC=$(ROCM)/bin/hipcc
 
 #BLAS
 ROCBLAS_LIB=rocblas

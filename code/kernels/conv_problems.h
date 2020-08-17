@@ -215,7 +215,7 @@ std::vector<std::tuple<unsigned int, unsigned int, unsigned int, unsigned int,
 std::vector<std::tuple<unsigned int, unsigned int, unsigned int, unsigned int,
                        unsigned int, unsigned int, unsigned int,
                        unsigned int, unsigned int, unsigned int, unsigned int>> inference_device_set = {
-    //std::make_tuple(151, 40, 1, 1, 32, 20, 5, 8, 8, 8, 2),  ARM convolution seg faults with this kernel
+    std::make_tuple(151, 40, 1, 1, 32, 20, 5, 8, 8, 8, 2),
     std::make_tuple(112, 112, 64, 1, 64, 1, 1, 0, 0, 1, 1),
     std::make_tuple(56, 56, 64, 1, 256, 1, 1, 0, 0, 1, 1),
     std::make_tuple(56, 56, 256, 1, 64, 1, 1, 0, 0, 1, 1),
@@ -228,7 +228,7 @@ std::vector<std::tuple<unsigned int, unsigned int, unsigned int, unsigned int,
     std::make_tuple(14, 14, 1024, 1, 256, 1, 1, 0, 0, 1, 1),
     std::make_tuple(14, 14, 256, 1, 1024, 1, 1, 0, 0, 1, 1),
     std::make_tuple(14, 14, 1024, 1, 512, 1, 1, 0, 0, 2, 2),
-    std::make_tuple(7, 7, 512, 1, 512, 3, 3, 1, 1, 1, 1),
+    //std::make_tuple(7, 7, 512, 1, 512, 3, 3, 1, 1, 1, 1), ARM convolution seg faults with this kernel
     std::make_tuple(7, 7, 512, 1, 2048, 1, 1, 0, 0, 1, 1),
     std::make_tuple(14, 14, 1024, 1, 2048, 1, 1, 0, 0, 2, 2),
     std::make_tuple(7, 7, 2048, 1, 512, 1, 1, 0, 0, 1, 1)

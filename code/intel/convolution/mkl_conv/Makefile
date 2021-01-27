@@ -33,7 +33,7 @@ ifeq ($(MKLLIB), mkl_rt)
     EXTRALIB = -L$(MKLROOT)/lib/intel64/ -lmkl_rt \
 			   -Wl,-rpath,$(MKLROOT)/lib/intel64
 endif
-EXTRALIB += -liomp5 -lpthread -lm -ldl
+EXTRALIB += -L$(MKLROOT)/lib/intel64/ -liomp5 -lpthread -lm -ldl
 endif
 
 ifeq ($(CONVLIB),MKLDNN)
@@ -43,7 +43,7 @@ ifeq ($(MKLDNNROOT),)
         to the install directory.)
 endif
 EXTRACXXFLAGS = -I$(MKLDNNROOT)/include -DUSE_MKLDNN
-EXTRALIB = -L$(MKLDNNROOT)/lib -lmkldnn -Wl,-rpath,$(MKLDNNROOT)/lib
+EXTRALIB = -L$(MKLDNNROOT)/lib -lmkldnn -lmklml_intel -Wl,-rpath,$(MKLDNNROOT)/lib
 endif
 
 ifeq ($(DEBUG), 1)

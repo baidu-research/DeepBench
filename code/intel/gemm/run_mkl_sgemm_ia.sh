@@ -33,10 +33,10 @@ echo "------------------------"
 echo "  SGEMM - "
 echo "--------------"
 echo " "
-numactl -m 1 ./sbench
+numactl -m 0 ./sbench
 echo " "
 echo "------------------------"
 echo " Packed SGEMM - "
 echo "--------------"
 echo " "
-numactl -m 1 ./sbench_pack
+numactl -m 0 ./sbench_pack

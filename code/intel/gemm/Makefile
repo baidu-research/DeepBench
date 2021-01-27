@@ -15,11 +15,16 @@
 # ******************************************************************************
 
 CC       =  icc
-CFLAGS	 =  -O2 -Wall -I$(MKLROOT)/include -I../../kernels -qopenmp -std=c++11
+CFLAGS	 =  -O2 -Wall -I$(MKLROOT)/include -I../../kernels -fopenmp -std=c++11
 
-EXTRALIB = -Wl,--start-group $(MKLROOT)/lib/intel64/libmkl_intel_lp64.a $(MKLROOT)/lib/intel64/libmkl_intel_thread.a $(MKLROOT)/lib/intel64/libmkl_core.a -Wl,--end-group -liomp5 -lpthread -lm -ldl
+EXTRALIB = -Wl,--start-group $(MKLROOT)/lib/intel64/libmkl_intel_lp64.a $(MKLROOT)/lib/intel64/libmkl_intel_thread.a $(MKLROOT)/lib/intel64/libmkl_core.a -Wl,--end-group -L$(MKLROOT)/lib/intel64/ -liomp5 -lpthread -lm -ldl
 
-all : sbench sbench_pack
+OPENBLAS_PATH?=/usr/local/openblas
+
+OPENBLAS_FLAGS = -O2 -Wall -I$(OPENBLAS_PATH)/include -I../../kernels -fopenmp -std=c++11 -DUSE_OPENBLAS
+OPENBLAS_LIBS = -L$(OPENBLAS_PATH)/lib -DUSE_OPENBLAS -lpthread -lm -ldl -lopenblas
+
+all : sbench sbench_pack ibench_s8u8s32 sbench_oblas
 
 ibench_s8u8s32 : ibench_s8u8s32.o
 	$(CC) $(CFLAGS) $^  $(EXTRALIB)  -o $@ 
@@ -33,11 +38,17 @@ sbench_pack : sbench_pack.o
 sbench_pack.o : bench.cpp ../../kernels/gemm_problems.h
 	$(CC) $(CFLAGS) -DPACKED_API -c -o $@ $<
 
+sbench.o: bench.cpp ../../kernels/gemm_problems.h
+	$(CC) $(CFLAGS) -c -o $@ $<
+
 sbench : sbench.o
 	$(CC) $(CFLAGS) $^  $(EXTRALIB)  -o $@ 
 
-sbench.o : bench.cpp ../../kernels/gemm_problems.h
-	$(CC) $(CFLAGS) -c -o $@ $<
+sbench_oblas.o : bench.cpp ../../kernels/gemm_problems.h
+	$(CC) $(OPENBLAS_FLAGS) -c -o $@ $<
+
+sbench_oblas: sbench_oblas.o
+	$(CC) $(OPENBLAS_FLAGS) $^ $(OPENBLAS_LIBS) -o $@
 
 clean :
 	rm -f *.o sbench sbench_pack ibench_s8u8s32

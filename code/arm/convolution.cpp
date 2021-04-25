@@ -12,7 +12,7 @@
 
 using namespace arm_compute;
 
-int time_cnn(unsigned int w, unsigned int h, unsigned int n, unsigned int c, 
+int time_cnn(unsigned int w, unsigned int h, unsigned int c, unsigned int n,
              unsigned int k, unsigned int filter_w, int filter_h,
              unsigned int pad_w, unsigned int pad_h, 
              unsigned int wstride, unsigned int hstride,
